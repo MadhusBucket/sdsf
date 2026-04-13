@@ -29,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/client";
+import { getEffectiveUserId } from "@/lib/auth/sharedAccess";
 import type { Company } from "@/lib/types/database";
 import { ensureProfile } from "@/lib/utils/ensureProfile";
 
@@ -61,11 +62,13 @@ export default function CompaniesPage() {
     } = await supabase.auth.getUser();
     if (!user) { router.replace("/login"); return; }
 
+    const effectiveUserId = await getEffectiveUserId(supabase, user.id, user.email!);
+
     setIsLoading(true);
     const { data } = await supabase
       .from("companies")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", effectiveUserId)
       .order("name");
     setCompanies((data as Company[] | null) ?? []);
     setIsLoading(false);
@@ -89,15 +92,17 @@ export default function CompaniesPage() {
     } = await supabase.auth.getUser();
     if (!user) { toast.error("You must be signed in."); return; }
 
+    const effectiveUserId = await getEffectiveUserId(supabase, user.id, user.email!);
+
     setAddBusy(true);
     try {
-      const { error: profileError } = await ensureProfile(supabase, user.id, user.email ?? null);
+      const { error: profileError } = await ensureProfile(supabase, effectiveUserId, user.email ?? null);
       if (profileError) { toast.error(profileError.message); return; }
 
       const { data, error } = await supabase
         .from("companies")
         .insert({
-          user_id: user.id,
+          user_id: effectiveUserId,
           name,
           address: addAddress.trim() || "",
           gstin: addGstin.trim() || null,

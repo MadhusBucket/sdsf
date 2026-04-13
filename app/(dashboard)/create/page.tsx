@@ -22,6 +22,7 @@ import { CompanySelector } from "@/components/creation/CompanySelector";
 import { ItemCard } from "@/components/creation/ItemCard";
 import { StickyFooter } from "@/components/creation/StickyFooter";
 import { createClient } from "@/lib/supabase/client";
+import { getEffectiveUserId } from "@/lib/auth/sharedAccess";
 import { useDocumentStore } from "@/lib/stores/documentStore";
 import type { Document, DocumentType } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
@@ -95,10 +96,12 @@ function CreatePageInner() {
         return;
       }
 
+      const effectiveUserId = await getEffectiveUserId(supabase, user.id, user.email!);
+
       const { data, error } = await supabase
         .from("documents")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("user_id", effectiveUserId)
         .eq("status", "draft")
         .eq("type", typeParam)
         .order("updated_at", { ascending: false })
@@ -118,7 +121,7 @@ function CreatePageInner() {
       const { draft: d } = useDocumentStore.getState();
       const max = await fetchMaxDocumentSerial(
         supabase,
-        user.id,
+        effectiveUserId,
         d.type,
         d.financial_year
       );

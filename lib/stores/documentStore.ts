@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
 import { createClient } from "@/lib/supabase/client";
+import { getEffectiveUserId } from "@/lib/auth/sharedAccess";
 import type { Document, DocumentType, LineItem, Unit } from "@/lib/types/database";
 import {
   calculateGST,
@@ -421,10 +422,12 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
     } = await supabase.auth.getUser();
     if (!user) return;
 
+    const effectiveUserId = await getEffectiveUserId(supabase, user.id, user.email!);
+
     const advance_received = 0;
     const balance_due = roundTo2(draft.grand_total - advance_received);
     const basePayload = {
-      user_id: user.id,
+      user_id: effectiveUserId,
       type: draft.type,
       doc_number: draft.number,
       date: draft.issue_date,

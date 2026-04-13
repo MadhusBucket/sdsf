@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
+import { getEffectiveUserId } from "@/lib/auth/sharedAccess";
 import type { Database } from "@/lib/types/database";
 
 export async function createClient() {
@@ -26,4 +27,25 @@ export async function createClient() {
       },
     }
   );
+}
+
+export async function getEffectiveUser() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return null;
+
+  const effectiveUserId = await getEffectiveUserId(
+    supabase,
+    user.id,
+    user.email!
+  );
+
+  return {
+    ...user,
+    id: effectiveUserId,
+    originalId: user.id,
+  };
 }

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/client";
+import { getEffectiveUserId } from "@/lib/auth/sharedAccess";
 import type { Company } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
 import { ensureProfile } from "@/lib/utils/ensureProfile";
@@ -41,11 +42,12 @@ export function CompanySelector({ value, onChange }: CompanySelectorProps) {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
+    const effectiveUserId = await getEffectiveUserId(supabase, user.id, user.email!);
     setLoading(true);
     const { data } = await supabase
       .from("companies")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", effectiveUserId)
       .order("name");
     setCompanies((data as Company[] | null) ?? []);
     setLoading(false);
@@ -105,10 +107,12 @@ export function CompanySelector({ value, onChange }: CompanySelectorProps) {
       return;
     }
 
+    const effectiveUserId = await getEffectiveUserId(supabase, user.id, user.email!);
+
     setLoading(true);
     const { error: profileError } = await ensureProfile(
       supabase,
-      user.id,
+      effectiveUserId,
       user.email ?? null
     );
     if (profileError) {
@@ -120,7 +124,7 @@ export function CompanySelector({ value, onChange }: CompanySelectorProps) {
     const { data, error } = await supabase
       .from("companies")
       .insert({
-        user_id: user.id,
+        user_id: effectiveUserId,
         name,
         address: newAddress.trim() || "",
         gstin: newGstin.trim() || null,

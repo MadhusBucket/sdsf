@@ -6,7 +6,7 @@ import {
   getMerchantFromEnv,
   getSignatoryNameFromEnv,
 } from "@/lib/pdf/merchantFromEnv";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getEffectiveUser } from "@/lib/supabase/server";
 import type { Company, Document } from "@/lib/types/database";
 
 export const dynamic = "force-dynamic";
@@ -17,11 +17,7 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const [supabase, user] = await Promise.all([createClient(), getEffectiveUser()]);
   if (!user) {
     return new NextResponse("Unauthorized", { status: 401 });
   }

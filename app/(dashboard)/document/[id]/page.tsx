@@ -11,7 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getEffectiveUser } from "@/lib/supabase/server";
 import type { Company, Document } from "@/lib/types/database";
 import { formatIndianCurrency } from "@/lib/utils/formatting";
 import { cn } from "@/lib/utils";
@@ -42,11 +42,7 @@ interface DocumentPageProps {
 
 export default async function DocumentPage({ params }: DocumentPageProps) {
   const { id } = await params;
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const [supabase, user] = await Promise.all([createClient(), getEffectiveUser()]);
   if (!user) notFound();
 
   const { data, error } = await supabase

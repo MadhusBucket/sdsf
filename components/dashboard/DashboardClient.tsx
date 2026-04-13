@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
+import { getEffectiveUserId } from "@/lib/auth/sharedAccess";
 import type { DocumentType } from "@/lib/types/database";
 
 import { DocumentList } from "./DocumentList";
@@ -50,10 +51,12 @@ export function DashboardClient() {
         return;
       }
 
+      const effectiveUserId = await getEffectiveUserId(supabase, user.id, user.email!);
+
       const { data } = await supabase
         .from("documents")
         .select("*, companies(name, address)")
-        .eq("user_id", user.id)
+        .eq("user_id", effectiveUserId)
         .order("created_at", { ascending: false });
 
       if (active) {

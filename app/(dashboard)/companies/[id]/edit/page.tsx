@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/client";
+import { getEffectiveUserId } from "@/lib/auth/sharedAccess";
 import type { Company } from "@/lib/types/database";
 
 export default function EditCompanyPage() {
@@ -33,11 +34,13 @@ export default function EditCompanyPage() {
       } = await supabase.auth.getUser();
       if (!user) { router.replace("/login"); return; }
 
+      const effectiveUserId = await getEffectiveUserId(supabase, user.id, user.email!);
+
       const { data, error } = await supabase
         .from("companies")
         .select("*")
         .eq("id", companyId)
-        .eq("user_id", user.id)
+        .eq("user_id", effectiveUserId)
         .maybeSingle();
 
       if (error || !data) {
