@@ -26,12 +26,13 @@ export function DateFilter({ selectedDate, onDateChange }: DateFilterProps) {
         <Button
           type="button"
           variant="outline"
-          className="h-11 justify-start border-gray-300 bg-white font-normal"
+          size="icon"
+          className={`h-11 w-11 border-gray-300 bg-white${selectedDate ? " border-blue-400 text-blue-600" : ""}`}
         >
-          <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
-          {selectedDate
-            ? format(selectedDate, "dd MMM yyyy")
-            : "Filter by Date"}
+          <CalendarIcon className="h-4 w-4 shrink-0" />
+          <span className="sr-only">
+            {selectedDate ? format(selectedDate, "dd MMM yyyy") : "Filter by Date"}
+          </span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">

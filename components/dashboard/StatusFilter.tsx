@@ -35,8 +35,7 @@ const STATUS_LABELS: Record<DocumentStatus, string> = {
 export function StatusFilter({ value, onChange }: StatusFilterProps) {
   return (
     <Select value={value} onValueChange={(next) => onChange(next as StatusFilterValue)}>
-      <SelectTrigger className="h-11 w-48 gap-1.5 border-gray-300 bg-white">
-        <span className="text-muted-foreground">Status:</span>
+      <SelectTrigger className="h-11 w-36 gap-1.5 border-gray-300 bg-white">
         {value === "all" ? (
           <span>All</span>
         ) : (
