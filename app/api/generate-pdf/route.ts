@@ -39,9 +39,12 @@ async function launchBrowser() {
   if (serverless) {
     return puppeteer.launch({
       args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
       executablePath: await chromium.executablePath(),
       headless: chromium.headless,
+      defaultViewport: {
+        width: 1920,
+        height: 1080,
+      },
     });
   }
 
