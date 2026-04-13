@@ -224,7 +224,7 @@ body {
             font-weight: 800;
             text-transform: uppercase;
             color: #666;
-            margin-bottom: 15px;
+            margin-bottom: 14px;
             display: block;
         }
 
