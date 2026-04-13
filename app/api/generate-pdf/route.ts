@@ -1,4 +1,4 @@
-import chromium from "@sparticuz/chromium-min";
+import chromium from "@sparticuz/chromium";
 import { NextRequest, NextResponse } from "next/server";
 import puppeteer from "puppeteer-core";
 
@@ -33,30 +33,27 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-async function resolveExecutablePath(): Promise<string> {
-  if (process.env.PUPPETEER_EXECUTABLE_PATH?.trim()) {
-    return process.env.PUPPETEER_EXECUTABLE_PATH.trim();
-  }
-  const serverless = Boolean(process.env.VERCEL || process.env.AWS_EXECUTION_ENV);
-  if (serverless) {
-    return chromium.executablePath();
-  }
-  return (
-    process.env.CHROME_PATH?.trim() ||
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-  );
-}
-
 async function launchBrowser() {
-  const executablePath = await resolveExecutablePath();
   const serverless = Boolean(process.env.VERCEL || process.env.AWS_EXECUTION_ENV);
-  const args = serverless
-    ? chromium.args
-    : ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"];
+
+  if (serverless) {
+    return puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+    });
+  }
+
+  // Local development: use system Chrome or CHROME_PATH override
+  const executablePath =
+    process.env.PUPPETEER_EXECUTABLE_PATH?.trim() ||
+    process.env.CHROME_PATH?.trim() ||
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 
   return puppeteer.launch({
     executablePath,
-    args,
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
     headless: true,
   });
 }
