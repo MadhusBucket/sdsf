@@ -20,7 +20,7 @@ export function KPICards({ documents }: KPICardsProps) {
     .filter((doc) => doc.status === "sent")
     .reduce((sum, doc) => sum + doc.grand_total, 0);
 
-  const convertedQuotes = quotations.filter((doc) => doc.status === "superseded").length;
+  const convertedQuotes = quotations.filter((doc) => doc.status === "replaced").length;
   const conversionRate =
     quotations.length === 0 ? 0 : (convertedQuotes / quotations.length) * 100;
 

@@ -72,7 +72,7 @@ export interface Document {
   drive_file_id: string | null;
   created_at: string;
   updated_at: string;
-  superseded_by: string | null;
+  replaced_by: string | null;
 }
 
 export interface Database {
@@ -101,12 +101,12 @@ export interface Database {
         Row: Document & Record<string, unknown>;
         Insert: (Omit<
           Document,
-          "id" | "created_at" | "updated_at" | "superseded_by"
+          "id" | "created_at" | "updated_at" | "replaced_by"
         > & {
           id?: string;
           created_at?: string;
           updated_at?: string;
-          superseded_by?: string | null;
+          replaced_by?: string | null;
         }) &
           Record<string, unknown>;
         Update: Partial<Document> & Record<string, unknown>;
