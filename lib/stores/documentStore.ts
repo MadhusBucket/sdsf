@@ -441,6 +441,7 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
       balance_due,
       status: "draft" as const,
       signature_url: null as string | null,
+      drive_file_id: null as string | null,
     };
 
     try {
