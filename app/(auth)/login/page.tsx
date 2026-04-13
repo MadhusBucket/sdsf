@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
@@ -12,6 +12,18 @@ import { Input } from "@/components/ui/input";
 import { signInWithEmail, signInWithPassword } from "./actions";
 
 export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-muted/30" />
+      }
+    >
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const searchParams = useSearchParams();
   const error = searchParams.get("error");
   const sent = searchParams.get("sent");
