@@ -28,8 +28,9 @@ export function StickyFooter() {
   };
 
   return (
-    <footer className="fixed right-0 bottom-0 left-0 z-40 border-t bg-background shadow-lg">
-      <div className="mx-auto max-w-3xl space-y-3 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+    <>
+      {/* Totals — scrolls with the page */}
+      <div className="mx-auto max-w-3xl space-y-3 border-t px-4 pt-4 mt-4 pb-28">
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm text-muted-foreground">Subtotal</span>
           <span className="text-base font-medium tabular-nums">
@@ -77,15 +78,21 @@ export function StickyFooter() {
             </span>
           </div>
         </div>
-
-        <Button
-          type="button"
-          className="h-12 w-full text-base"
-          onClick={handlePreview}
-        >
-          Preview & Generate PDF
-        </Button>
       </div>
-    </footer>
+
+      {/* Button only — fixed to bottom */}
+      <footer className="fixed right-0 bottom-0 left-0 z-40 border-t bg-background shadow-lg">
+        <div className="mx-auto max-w-3xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <Button
+            type="button"
+            size="lg"
+            className="h-12 w-full text-base"
+            onClick={handlePreview}
+          >
+            Preview & Generate PDF
+          </Button>
+        </div>
+      </footer>
+    </>
   );
 }

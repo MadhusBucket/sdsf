@@ -2,18 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { motion } from "framer-motion";
 
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
 import type { DocumentType } from "@/lib/types/database";
 
@@ -108,9 +108,15 @@ export function DashboardClient() {
         <KPICards documents={documents} />
         <DocumentToggle value={type} onChange={setType} />
         <SearchBar query={query} onChange={setQuery} />
-        <div className="flex gap-2">
-          <StatusFilter value={status} onChange={setStatus} />
-          <DateFilter selectedDate={dateFilter} onDateChange={setDateFilter} />
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            {type === "quotation" ? "Quotations" : "Invoices"}{" "}
+            <span className="font-medium text-foreground">{filteredDocuments.length}</span>
+          </p>
+          <div className="flex items-center gap-2">
+            <StatusFilter value={status} onChange={setStatus} />
+            <DateFilter selectedDate={dateFilter} onDateChange={setDateFilter} />
+          </div>
         </div>
 
         {isLoading ? (
@@ -118,7 +124,7 @@ export function DashboardClient() {
             Loading documents...
           </div>
         ) : (
-          <DocumentList documents={filteredDocuments} />
+          <DocumentList documents={filteredDocuments} documentType={type} />
         )}
       </div>
 
@@ -140,31 +146,38 @@ export function DashboardClient() {
         </span>
       </motion.div>
 
-        <AlertDialog open={typePickerOpen} onOpenChange={setTypePickerOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>What would you like to create?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Choose the document type to get started.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
+        <Dialog open={typePickerOpen} onOpenChange={setTypePickerOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>What would you like to create?</DialogTitle>
+            <DialogDescription>Choose the document type to get started.</DialogDescription>
+          </DialogHeader>
+          <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </DialogClose>
+          <div className="flex flex-col gap-3 pt-2">
             <Button
               type="button"
               variant="outline"
+              size="lg"
+              className="w-full"
               onClick={() => handlePickType("quotation")}
             >
               Create Quotation
             </Button>
             <Button
               type="button"
+              variant="outline"
+              size="lg"
+              className="w-full"
               onClick={() => handlePickType("invoice")}
             >
               Create Invoice
             </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

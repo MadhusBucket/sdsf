@@ -5,7 +5,6 @@ export type DocumentStatus =
   | "sent"
   | "paid"
   | "void"
-  | "superseded"
   | "replaced";
 
 export type Unit =

@@ -7,9 +7,10 @@ export async function uploadDocumentToDrive(
   date: string
 ): Promise<string | null> {
   try {
-    const pdfResponse = await fetch(`/api/generate-pdf?id=${encodeURIComponent(documentId)}`);
-    if (!pdfResponse.ok) throw new Error("PDF generation failed");
-    const pdfBlob = await pdfResponse.blob();
+    // TODO: Puppeteer PDF generation has been removed. Drive upload now requires
+    // a different PDF source (e.g. a third-party PDF API or a server-side
+    // html-to-pdf library). Until that is wired up this function returns null.
+    throw new Error("Drive upload unavailable: PDF generation source not configured");
 
     const docDate = new Date(date);
     const year = format(docDate, "yyyy");

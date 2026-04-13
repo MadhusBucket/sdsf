@@ -158,7 +158,7 @@ function CreatePageInner() {
 
   return (
     <>
-      <main className="mx-auto max-w-3xl space-y-4 px-4 pt-3 pb-56">
+      <main className="mx-auto max-w-3xl space-y-4 px-4 pt-3">
         <div className="flex items-center gap-3">
           <Button
             type="button"
@@ -268,7 +268,7 @@ function CreatePageInner() {
           <Button
             type="button"
             variant="outline"
-            className="h-12 w-full text-base"
+            className="h-12 w-full text-base bg-white"
             onClick={() => addLineItem()}
           >
             Add Item

@@ -45,50 +45,50 @@ const STATUS_LABELS: Record<Document["status"], string> = {
   sent: "Sent",
   paid: "Paid",
   void: "Cancelled",
-  superseded: "Superseded",
   replaced: "Replaced",
 };
 
 export function DocumentPdfToolbar({ document }: DocumentPdfToolbarProps) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [voidDialogOpen, setVoidDialogOpen] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState<Document["status"] | null>(null);
 
-  const filename = `${document.doc_number.replace(/\//g, "-")}.pdf`;
-  const pdfUrl = `/api/generate-pdf?id=${encodeURIComponent(document.id)}`;
+  const docWord = document.type === "invoice" ? "invoice" : "quotation";
 
-  const fetchPdfBlob = async (): Promise<Blob> => {
-    const res = await fetch(pdfUrl);
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(typeof err.error === "string" ? err.error : res.statusText);
-    }
-    return res.blob();
+  const STATUS_CONFIRMATIONS: Record<Document["status"], { title: string; description: string }> = {
+    draft: {
+      title: "Move back to Draft?",
+      description: `This document will be marked as a draft. This means it's not sent yet and you can still make changes to it.`,
+    },
+    sent: {
+      title: "Mark as Sent?",
+      description: `This document will be marked as sent. Use this when you've given the ${docWord} to your customer.`,
+    },
+    paid: {
+      title: "Mark as Paid?",
+      description: `This ${docWord} will be marked as paid. Use this when your customer has paid you the full amount.`,
+    },
+    void: {
+      title: "Cancel this document?",
+      description: `This document will be marked as cancelled. Use this when you're not going to use this ${docWord} anymore (for example, if the customer changed their mind or you made a mistake).`,
+    },
+    replaced: {
+      title: "Mark as Replaced?",
+      description: `This document will be marked as replaced. Use this when you've created a newer, updated version of this ${docWord}.`,
+    },
   };
 
-  const triggerDownload = (blob: Blob) => {
-    const url = URL.createObjectURL(blob);
-    const a = globalThis.document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleDownload = async () => {
-    setBusy(true);
-    try {
-      triggerDownload(await fetchPdfBlob());
-    } catch (e) {
-      console.error(e);
-      toast.error("Failed to download PDF");
-    } finally {
-      setBusy(false);
+  const handlePrintPreview = () => {
+    const iframe = globalThis.document.querySelector(
+      'iframe[src*="/invoice/"]'
+    ) as HTMLIFrameElement | null;
+    if (iframe?.contentWindow) {
+      iframe.contentWindow.print();
     }
   };
 
   const handleShare = async () => {
-    const url = `${window.location.origin}/api/generate-pdf?id=${encodeURIComponent(document.id)}`;
+    const url = `${window.location.origin}/invoice/${encodeURIComponent(document.id)}`;
     const title = `${document.type === "invoice" ? "Invoice" : "Quotation"} ${document.doc_number}`;
 
     try {
@@ -101,62 +101,37 @@ export function DocumentPdfToolbar({ document }: DocumentPdfToolbarProps) {
     } catch (e) {
       if (e instanceof Error && e.name === "AbortError") return;
       console.error(e);
-      toast.error("Share failed. Downloading instead…");
-      void handleDownload();
+      await navigator.clipboard.writeText(url).catch(() => {});
+      toast.info("Link copied to clipboard");
     }
   };
 
-  const handleMarkAsSent = async () => {
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("documents")
-      .update({ status: "sent" })
-      .eq("id", document.id);
-    if (error) { toast.error("Failed to update status"); return; }
-    toast.success("Document marked as sent");
-    router.refresh();
+  const handleStatusChange = (status: Document["status"]) => {
+    setPendingStatus(status);
   };
 
-  const handleMarkAsPaid = async () => {
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("documents")
-      .update({ status: "paid" })
-      .eq("id", document.id);
-    if (error) { toast.error("Failed to update status"); return; }
-    toast.success("Document marked as paid");
-    router.refresh();
-  };
+  const confirmStatusChange = async () => {
+    if (!pendingStatus) return;
 
-  const handleVoidConfirmed = async () => {
     const supabase = createClient();
-    const { error } = await supabase
-      .from("documents")
-      .update({ status: "void" })
-      .eq("id", document.id);
-    if (error) { toast.error("Failed to cancel document"); return; }
-    toast.success("Document cancelled");
-    router.refresh();
-  };
-
-  async function handleMarkAsReplaced() {
     setBusy(true);
     try {
-      const supabase = createClient();
       const { error } = await supabase
         .from("documents")
-        .update({ status: "replaced" })
+        .update({ status: pendingStatus })
         .eq("id", document.id);
+
       if (error) throw error;
-      toast.success("Document marked as replaced");
+
+      toast.success(`Document marked as ${STATUS_LABELS[pendingStatus].toLowerCase()}`);
       router.refresh();
     } catch (e) {
-      console.error(e);
-      toast.error("Failed to mark as replaced");
+      toast.error("Failed to update status");
     } finally {
       setBusy(false);
+      setPendingStatus(null);
     }
-  }
+  };
 
   const hasStatusActions =
     document.status === "draft" ||
@@ -177,19 +152,19 @@ export function DocumentPdfToolbar({ document }: DocumentPdfToolbarProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
               {document.status === "draft" && (
-                <DropdownMenuItem onClick={() => void handleMarkAsSent()}>
+                <DropdownMenuItem onClick={() => handleStatusChange("sent")}>
                   <Send className="mr-2 h-4 w-4" />
                   Mark as Sent
                 </DropdownMenuItem>
               )}
               {document.status === "sent" && (
-                <DropdownMenuItem onClick={() => void handleMarkAsPaid()}>
+                <DropdownMenuItem onClick={() => handleStatusChange("paid")}>
                   <CheckCircle className="mr-2 h-4 w-4" />
                   Mark as Paid
                 </DropdownMenuItem>
               )}
               {(document.status === "sent" || document.status === "paid") && (
-                <DropdownMenuItem onClick={() => void handleMarkAsReplaced()}>
+                <DropdownMenuItem onClick={() => handleStatusChange("replaced")}>
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Mark as Replaced
                 </DropdownMenuItem>
@@ -199,7 +174,7 @@ export function DocumentPdfToolbar({ document }: DocumentPdfToolbarProps) {
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     className="text-destructive focus:text-destructive"
-                    onClick={() => setVoidDialogOpen(true)}
+                    onClick={() => handleStatusChange("void")}
                   >
                     <X className="mr-2 h-4 w-4" />
                     Mark as Cancelled
@@ -213,23 +188,22 @@ export function DocumentPdfToolbar({ document }: DocumentPdfToolbarProps) {
 
         <Button
           type="button"
+          variant="default"
+          className="h-11"
+          onClick={handlePrintPreview}
+        >
+          <Download className="mr-2 h-4 w-4" />
+          Download PDF
+        </Button>
+
+        <Button
+          type="button"
           variant="outline"
           className="h-11"
           onClick={() => void handleShare()}
         >
           <Share2 className="mr-2 h-4 w-4" />
           Share
-        </Button>
-
-        <Button
-          type="button"
-          variant="default"
-          className="h-11"
-          disabled={busy}
-          onClick={() => void handleDownload()}
-        >
-          <Download className="mr-2 h-4 w-4" />
-          {busy ? "Preparing…" : "Download"}
         </Button>
 
         {document.status === "draft" && (
@@ -245,22 +219,31 @@ export function DocumentPdfToolbar({ document }: DocumentPdfToolbarProps) {
         )}
       </div>
 
-      <AlertDialog open={voidDialogOpen} onOpenChange={setVoidDialogOpen}>
+      <AlertDialog
+        open={pendingStatus !== null}
+        onOpenChange={(open) => { if (!open) setPendingStatus(null); }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Cancel this document?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {pendingStatus ? STATUS_CONFIRMATIONS[pendingStatus].title : ""}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This will mark {document.doc_number} as cancelled. This action
-              cannot be undone.
+              {pendingStatus ? STATUS_CONFIRMATIONS[pendingStatus].description : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={busy}>Keep current status</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => void handleVoidConfirmed()}
+              disabled={busy}
+              className={
+                pendingStatus === "void"
+                  ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  : undefined
+              }
+              onClick={() => void confirmStatusChange()}
             >
-              Cancel Document
+              {busy ? "Saving…" : "Confirm"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

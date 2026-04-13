@@ -12,6 +12,7 @@ import type { DashboardDocument } from "./SearchBar";
 
 interface DocumentListProps {
   documents: DashboardDocument[];
+  documentType?: "invoice" | "quotation";
 }
 
 const STATUS_STYLES: Record<DocumentStatus, string> = {
@@ -19,7 +20,6 @@ const STATUS_STYLES: Record<DocumentStatus, string> = {
   sent: "bg-blue-100 text-blue-700 border-blue-200",
   paid: "bg-emerald-100 text-emerald-700 border-emerald-200",
   void: "bg-red-100 text-red-700 border-red-200",
-  superseded: "bg-orange-100 text-orange-700 border-orange-200",
   replaced: "bg-purple-100 text-purple-700 border-purple-200",
 };
 
@@ -28,15 +28,15 @@ const STATUS_LABELS: Record<DocumentStatus, string> = {
   sent: "Sent",
   paid: "Paid",
   void: "Cancelled",
-  superseded: "Superseded",
   replaced: "Replaced",
 };
 
-export function DocumentList({ documents }: DocumentListProps) {
+export function DocumentList({ documents, documentType }: DocumentListProps) {
   if (documents.length === 0) {
     return (
       <div className="rounded-lg border border-dashed bg-muted/30 px-4 py-10 text-center text-sm text-muted-foreground">
-        No documents yet. Create your first invoice!
+        No documents yet. Create your first{" "}
+        {documentType === "quotation" ? "quotation" : "invoice"}!
       </div>
     );
   }
