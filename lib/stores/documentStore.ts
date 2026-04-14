@@ -370,7 +370,12 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
     set((state) => {
       const line_items = state.draft.line_items.map((item) => {
         if (item.sl_no !== slNo) return item;
-        const merged = { ...item, ...updates } as LineItem;
+        let merged = { ...item, ...updates } as LineItem;
+        if (updates.is_lumpsum === true) {
+          merged = { ...merged, unit: "-", rate: 0, qty: 0 };
+        } else if (updates.is_lumpsum === false) {
+          merged = { ...merged, unit: DEFAULT_UNIT, rate: 0, qty: 0 };
+        }
         const amount = merged.is_lumpsum
           ? roundTo2(merged.amount)
           : calculateLineTotal(merged.qty, merged.rate);

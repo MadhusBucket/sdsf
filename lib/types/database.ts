@@ -17,7 +17,8 @@ export type Unit =
   | "BOX"
   | "CFT"
   | "CUM"
-  | "TRIP";
+  | "TRIP"
+  | "-";
 
 export interface LineItem {
   sl_no: number;

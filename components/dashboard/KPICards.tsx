@@ -28,13 +28,13 @@ export function KPICards({ documents }: KPICardsProps) {
     <section className="grid grid-cols-1 gap-2 sm:grid-cols-2">
       <article className="rounded-lg border bg-card p-3">
         <p className="text-xs text-muted-foreground">Total Revenue</p>
-        <p className="mt-0.5 text-base font-semibold tabular-nums">
+        <p className="mt-0.5 text-3xl font-bold tabular-nums">
           {formatIndianCurrency(totalRevenue)}
         </p>
       </article>
       <article className="rounded-lg border bg-card p-3">
         <p className="text-xs text-muted-foreground">Pending Payments</p>
-        <p className="mt-0.5 text-base font-semibold tabular-nums">
+        <p className="mt-0.5 text-3xl font-bold tabular-nums">
           {formatIndianCurrency(pendingPayments)}
         </p>
       </article>

@@ -68,6 +68,10 @@ export function buildInvoiceHtml(p: InvoiceHtmlPayload): string {
       const qty = Number(item.qty ?? 0);
       const rate = Number(item.rate ?? 0);
       const amount = Number(item.amount ?? 0);
+      const isLumpsum = item.is_lumpsum;
+      const qtyDisplay = isLumpsum ? "-" : escapeHtml(String(qty));
+      const unitDisplay = isLumpsum ? "-" : escapeHtml(item.unit ?? "");
+      const rateDisplay = isLumpsum ? "-" : escapeHtml(formatIndianCurrency(rate));
       return `
             <tr>
                 <td>${escapeHtml(String(item.sl_no ?? ""))}</td>
@@ -75,9 +79,9 @@ export function buildInvoiceHtml(p: InvoiceHtmlPayload): string {
                     <span class="item-title">${escapeHtml(item.description || "—")}</span>
                     ${sub ? `<span class="item-sub">${escapeHtml(sub)}</span>` : ""}
                 </td>
-                <td class="text-center bold-num">${escapeHtml(String(qty))}</td>
-                <td class="text-center">${escapeHtml(item.unit ?? "")}</td>
-                <td class="text-right bold-num">${escapeHtml(formatIndianCurrency(rate))}</td>
+                <td class="text-center bold-num">${qtyDisplay}</td>
+                <td class="text-center">${unitDisplay}</td>
+                <td class="text-right bold-num">${rateDisplay}</td>
                 <td class="text-right bold-num">${escapeHtml(formatIndianCurrency(amount))}</td>
             </tr>`;
     })

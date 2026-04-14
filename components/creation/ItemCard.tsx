@@ -104,56 +104,74 @@ export function ItemCard({ slNo }: ItemCardProps) {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:items-end sm:gap-2">
           <div className="space-y-1.5">
             <span className="text-xs font-medium text-muted-foreground">Qty</span>
-            <Input
-              type="number"
-              inputMode="decimal"
-              className="h-12 min-w-0 flex-1 text-base"
-              disabled={greyOut}
-              value={item.qty || ""}
-              onChange={(e) =>
-                updateLineItem(slNo, {
-                  qty: Number.parseFloat(e.target.value) || 0,
-                })
-              }
-            />
+            {lumpsum ? (
+              <div className="flex h-12 w-full items-center rounded-md border border-input bg-muted px-3 text-base text-muted-foreground select-none">
+                -
+              </div>
+            ) : (
+              <Input
+                type="number"
+                inputMode="decimal"
+                className="h-12 min-w-0 flex-1 text-base"
+                value={item.qty || ""}
+                onChange={(e) =>
+                  updateLineItem(slNo, {
+                    qty: Number.parseFloat(e.target.value) || 0,
+                  })
+                }
+              />
+            )}
           </div>
 
           <div className="space-y-1.5 sm:min-w-0">
             <span className="text-xs font-medium text-muted-foreground">Unit</span>
-            <Select
-              value={item.unit}
-              disabled={greyOut}
-              onValueChange={(value) =>
-                updateLineItem(slNo, { unit: value as Unit })
-              }
-            >
-              <SelectTrigger className="w-full text-base">
-                <SelectValue placeholder="Unit" />
-              </SelectTrigger>
-              <SelectContent position="popper">
-                {UNIT_OPTIONS.map((unit) => (
-                  <SelectItem key={unit} value={unit}>
-                    {unit}
+            {lumpsum ? (
+              <div className="flex h-10 w-full items-center rounded-md border border-input bg-muted px-3 text-base text-muted-foreground select-none">
+                -
+              </div>
+            ) : (
+              <Select
+                value={item.unit}
+                onValueChange={(value) =>
+                  updateLineItem(slNo, { unit: value as Unit })
+                }
+              >
+                <SelectTrigger className="w-full text-base">
+                  <SelectValue placeholder="Unit" />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  <SelectItem value="" disabled>
+                    Pick unit
                   </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  {UNIT_OPTIONS.map((unit) => (
+                    <SelectItem key={unit} value={unit}>
+                      {unit}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           <div className="space-y-1.5">
             <span className="text-xs font-medium text-muted-foreground">Rate</span>
-            <Input
-              type="number"
-              inputMode="decimal"
-              className="h-12 text-base"
-              disabled={greyOut}
-              value={item.rate || ""}
-              onChange={(e) =>
-                updateLineItem(slNo, {
-                  rate: Number.parseFloat(e.target.value) || 0,
-                })
-              }
-            />
+            {lumpsum ? (
+              <div className="flex h-12 w-full items-center rounded-md border border-input bg-muted px-3 text-base text-muted-foreground select-none">
+                -
+              </div>
+            ) : (
+              <Input
+                type="number"
+                inputMode="decimal"
+                className="h-12 text-base"
+                value={item.rate || ""}
+                onChange={(e) =>
+                  updateLineItem(slNo, {
+                    rate: Number.parseFloat(e.target.value) || 0,
+                  })
+                }
+              />
+            )}
           </div>
         </div>
 
