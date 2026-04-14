@@ -93,6 +93,13 @@ export default async function DocumentPage({ params }: DocumentPageProps) {
           </div>
         </CardHeader>
         <CardContent className="grid gap-3 pt-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <p className="text-xs font-medium uppercase text-muted-foreground">Company</p>
+            <p className="text-sm font-medium">{company.name}</p>
+            {company.address && (
+              <p className="text-sm text-muted-foreground mt-1">{company.address}</p>
+            )}
+          </div>
           <div>
             <p className="text-xs font-medium uppercase text-muted-foreground">Type</p>
             <p className="text-sm">{docPayload.type === "invoice" ? "Invoice" : "Quotation"}</p>

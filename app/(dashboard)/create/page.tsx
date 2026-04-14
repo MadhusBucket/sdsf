@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import {
   AlertDialog,
+  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -68,6 +69,13 @@ function CreatePageInner() {
   const lineItems = useDocumentStore((s) => s.draft.line_items);
   const [docNumberError, setDocNumberError] = useState<string | null>(null);
   const [backDialogOpen, setBackDialogOpen] = useState(false);
+  const [showDraftDialog, setShowDraftDialog] = useState(false);
+  const [draftDocument, setDraftDocument] = useState<Document | null>(null);
+  const pendingRef = useRef<{
+    supabase: ReturnType<typeof createClient>;
+    effectiveUserId: string;
+    loadId: number;
+  } | null>(null);
 
   const hasWorkspaceChanges = () =>
     pristineRef.current !== null &&
@@ -111,12 +119,14 @@ function CreatePageInner() {
       if (loadId !== loadIdRef.current) return;
 
       if (data && !error) {
-        setDraft(data as Document);
-        toast.message("Resumed your draft");
-      } else {
-        initializeDraft(typeParam);
-        toast.message(`Started new ${typeParam}`);
+        pendingRef.current = { supabase, effectiveUserId, loadId };
+        setDraftDocument(data as Document);
+        setShowDraftDialog(true);
+        return;
       }
+
+      initializeDraft(typeParam);
+      toast.message(`Started new ${typeParam}`);
 
       const { draft: d } = useDocumentStore.getState();
       const max = await fetchMaxDocumentSerial(
@@ -132,6 +142,36 @@ function CreatePageInner() {
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleResumeDraft = () => {
+    if (!pendingRef.current || !draftDocument) return;
+    const { supabase, effectiveUserId, loadId } = pendingRef.current;
+    setDraft(draftDocument);
+    toast.message("Resumed your draft");
+    setShowDraftDialog(false);
+    void (async () => {
+      const { draft: d } = useDocumentStore.getState();
+      const max = await fetchMaxDocumentSerial(supabase, effectiveUserId, d.type, d.financial_year);
+      if (loadId !== loadIdRef.current) return;
+      applyDocumentSequence(max);
+      pristineRef.current = captureWorkspaceSignature();
+    })();
+  };
+
+  const handleStartFresh = () => {
+    if (!pendingRef.current) return;
+    const { supabase, effectiveUserId, loadId } = pendingRef.current;
+    initializeDraft(typeParam);
+    toast.message(`Started new ${typeParam}`);
+    setShowDraftDialog(false);
+    void (async () => {
+      const { draft: d } = useDocumentStore.getState();
+      const max = await fetchMaxDocumentSerial(supabase, effectiveUserId, d.type, d.financial_year);
+      if (loadId !== loadIdRef.current) return;
+      applyDocumentSequence(max);
+      pristineRef.current = captureWorkspaceSignature();
+    })();
+  };
 
   const handleDocSuffixBlur = useCallback(() => {
     const res = commitEditableDocNumber();
@@ -280,6 +320,26 @@ function CreatePageInner() {
       </main>
 
       <StickyFooter />
+
+      <AlertDialog open={showDraftDialog} onOpenChange={setShowDraftDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Resume Draft?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have an unfinished {typeParam} draft. Do you want to continue
+              working on it or start a new one?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleStartFresh}>
+              Start Fresh
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleResumeDraft}>
+              Resume Draft
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={backDialogOpen}

@@ -139,3 +139,10 @@ html.font-size-large {
 html.font-size-xlarge {
   font-size: 125% !important;
 }
+
+/* Prevent iOS from zooming in when focusing inputs (requires >= 16px font-size) */
+@media (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}

@@ -48,7 +48,6 @@ export function DocumentList({ documents, documentType }: DocumentListProps) {
           ?.split("\n")
           .map((l) => l.trim())
           .filter(Boolean) ?? [];
-        const addressSummary = addressLines.slice(0, 2).join(", ");
         const hasGst = (doc.cgst_amount ?? 0) > 0 || (doc.sgst_amount ?? 0) > 0;
 
         return (
@@ -83,9 +82,9 @@ export function DocumentList({ documents, documentType }: DocumentListProps) {
               <p className="text-sm font-medium">
                 {doc.companies?.name ?? "Unknown company"}
               </p>
-              {addressSummary && (
-                <p className="line-clamp-1 text-xs text-muted-foreground">
-                  {addressSummary}
+              {addressLines.length > 0 && (
+                <p className="text-xs text-muted-foreground whitespace-pre-line">
+                  {addressLines.join("\n")}
                 </p>
               )}
             </div>
