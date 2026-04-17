@@ -278,12 +278,12 @@ body {
         }
 
         td {
-            padding: 20px 5px;
+            padding: 5px 5px;
             border-bottom: 1px solid #eee;
             vertical-align: top;
         }
         td:first-child {
-            font-size: 11px;
+            font-size: 12px;
         }
 
         .item-title {
@@ -300,8 +300,8 @@ body {
         }
 
         .text-right { text-align: right; }
-        .text-center { text-align: center; font-size: 10px; justify-content: center; }
-        .bold-num { font-weight: 400; font-size: 10px; }
+        .text-center { text-align: center; font-size: 11px; justify-content: center; }
+        .bold-num { font-weight: 500; font-size: 11px; }
         
 
         /* TOTALS */
@@ -347,7 +347,7 @@ body {
         .footer-grid {
               display: grid;
     grid-template-columns: 1.5fr 1fr;
-    gap: 100px;
+    gap: 10px;
     page-break-inside: avoid;
     break-inside: avoid;
         }
