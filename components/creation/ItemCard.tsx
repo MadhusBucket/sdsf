@@ -140,9 +140,6 @@ export function ItemCard({ slNo }: ItemCardProps) {
                   <SelectValue placeholder="Unit" />
                 </SelectTrigger>
                 <SelectContent position="popper">
-                  <SelectItem value="" disabled>
-                    Pick unit
-                  </SelectItem>
                   {UNIT_OPTIONS.map((unit) => (
                     <SelectItem key={unit} value={unit}>
                       {unit}
