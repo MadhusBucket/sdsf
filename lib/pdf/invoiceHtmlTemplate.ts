@@ -212,12 +212,12 @@ body {
         }
 
         .address-block p {
-            font-size: 12px;
+            font-size: 11px;
             margin-bottom: 2px;
         }
 
         .address-block strong {
-            font-size: 14px;
+            font-size: 13px;
             display: block;
             margin-bottom: 10px;
             text-transform: uppercase;
@@ -234,7 +234,7 @@ body {
 
         .gst-bold {
             font-weight: 700;
-            font-size: 12px;
+            font-size: 10px;
             margin-top: 10px;
             display: block;
         }
@@ -287,8 +287,8 @@ body {
         }
 
         .item-title {
-            font-weight: 700;
-            font-size: 13px;
+            font-weight: 600;
+            font-size: 12px;
             display: block;
             margin-bottom: 4px;
         }
@@ -300,8 +300,8 @@ body {
         }
 
         .text-right { text-align: right; }
-        .text-center { text-align: center;font-size: 12px; justify-content: center; }
-        .bold-num { font-weight: 400; font-size: 13px; }
+        .text-center { text-align: center; font-size: 10px; justify-content: center; }
+        .bold-num { font-weight: 400; font-size: 10px; }
         
 
         /* TOTALS */
@@ -322,7 +322,7 @@ body {
             display: flex;
             justify-content: space-between;
             padding: 6px 12px;
-            font-size: 13px;
+            font-size: 12px;
             border-bottom: 1px solid #d2d2d2;
         }
 
