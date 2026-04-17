@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ChevronsUpDown, Plus, Settings } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Command, CommandInput, CommandList } from "@/components/ui/command";
 import Link from "next/link";
@@ -33,6 +34,7 @@ export function CompanySelector({ value, onChange }: CompanySelectorProps) {
   const [adding, setAdding] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [newName, setNewName] = useState("");
+  const [newBranch, setNewBranch] = useState("");
   const [newAddress, setNewAddress] = useState("");
   const [newGstin, setNewGstin] = useState("");
 
@@ -53,14 +55,27 @@ export function CompanySelector({ value, onChange }: CompanySelectorProps) {
     setLoading(false);
   }, []);
 
+  // Load companies on mount so a pre-selected value (e.g. when editing an
+  // existing document) can resolve its display name immediately.
+  useEffect(() => {
+    void loadCompanies();
+  }, [loadCompanies]);
+
   const selected = companies.find((c) => c.id === value);
+
+  const companyLabel = (c: Company) =>
+    c.branch ? `${c.branch} – ${c.name}` : c.name;
 
   const q = searchQuery.trim();
   const qLower = q.toLowerCase();
   const filteredCompanies =
     q.length === 0
       ? companies
-      : companies.filter((c) => c.name.toLowerCase().includes(qLower));
+      : companies.filter(
+          (c) =>
+            c.name.toLowerCase().includes(qLower) ||
+            (c.branch?.toLowerCase().includes(qLower) ?? false)
+        );
 
   const showCreateFromSearch = q.length > 0 && filteredCompanies.length === 0;
 
@@ -76,6 +91,7 @@ export function CompanySelector({ value, onChange }: CompanySelectorProps) {
   const resetAddForm = () => {
     setAdding(false);
     setNewName("");
+    setNewBranch("");
     setNewAddress("");
     setNewGstin("");
   };
@@ -87,6 +103,7 @@ export function CompanySelector({ value, onChange }: CompanySelectorProps) {
   const openAddForm = (prefillName: string) => {
     setAdding(true);
     setNewName(prefillName);
+    setNewBranch("");
     setNewAddress("");
     setNewGstin("");
     setSearchQuery("");
@@ -126,6 +143,7 @@ export function CompanySelector({ value, onChange }: CompanySelectorProps) {
       .insert({
         user_id: effectiveUserId,
         name,
+        branch: newBranch.trim() || null,
         address: newAddress.trim() || "",
         gstin: newGstin.trim() || null,
       })
@@ -180,7 +198,7 @@ export function CompanySelector({ value, onChange }: CompanySelectorProps) {
             aria-expanded={open}
             className="h-12 w-full justify-between text-base font-normal"
           >
-            {selected ? selected.name : "Select company..."}
+            {selected ? companyLabel(selected) : "Select company..."}
             <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
@@ -197,6 +215,15 @@ export function CompanySelector({ value, onChange }: CompanySelectorProps) {
                   onChange={(e) => setNewName(e.target.value)}
                   placeholder="Company name"
                   autoComplete="organization"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="co-branch">Branch (optional)</Label>
+                <Input
+                  id="co-branch"
+                  value={newBranch}
+                  onChange={(e) => setNewBranch(e.target.value)}
+                  placeholder="e.g., Banjara Hills, Jubilee Hills"
                 />
               </div>
               <div className="space-y-1">
@@ -311,7 +338,12 @@ export function CompanySelector({ value, onChange }: CompanySelectorProps) {
                               setOpen(false);
                             }}
                           >
-                            <div className="flex flex-col gap-0.5">
+                            <div className="flex flex-col gap-1">
+                              {c.branch && (
+                                <Badge variant="secondary" className="w-fit text-xs">
+                                  {c.branch}
+                                </Badge>
+                              )}
                               <div className="text-sm font-medium">{c.name}</div>
                               {addressLine1 && (
                                 <div className="truncate text-xs text-muted-foreground">

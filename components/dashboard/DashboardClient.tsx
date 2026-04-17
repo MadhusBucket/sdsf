@@ -55,7 +55,7 @@ export function DashboardClient() {
 
       const { data } = await supabase
         .from("documents")
-        .select("*, companies(name, address)")
+        .select("*, companies(name, branch, address)")
         .eq("user_id", effectiveUserId)
         .order("created_at", { ascending: false });
 

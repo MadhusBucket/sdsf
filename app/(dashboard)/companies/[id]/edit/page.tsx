@@ -22,6 +22,7 @@ export default function EditCompanyPage() {
   const [company, setCompany] = useState<Company | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [name, setName] = useState("");
+  const [branch, setBranch] = useState("");
   const [address, setAddress] = useState("");
   const [gstin, setGstin] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -52,6 +53,7 @@ export default function EditCompanyPage() {
       const co = data as Company;
       setCompany(co);
       setName(co.name);
+      setBranch(co.branch ?? "");
       setAddress(co.address ?? "");
       setGstin(co.gstin ?? "");
       setIsLoading(false);
@@ -69,6 +71,7 @@ export default function EditCompanyPage() {
         .from("companies")
         .update({
           name: trimmedName,
+          branch: branch.trim() || null,
           address: address.trim(),
           gstin: gstin.trim() || null,
         })
@@ -114,6 +117,17 @@ export default function EditCompanyPage() {
             onChange={(e) => setName(e.target.value)}
             placeholder="Company name"
             autoComplete="organization"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <Label htmlFor="edit-branch">Branch (optional)</Label>
+          <Input
+            id="edit-branch"
+            className="text-base"
+            value={branch}
+            onChange={(e) => setBranch(e.target.value)}
+            placeholder="e.g., Banjara Hills, Jubilee Hills"
           />
         </div>
 

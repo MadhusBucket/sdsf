@@ -16,6 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -46,6 +47,7 @@ export default function CompaniesPage() {
   // Add dialog
   const [addOpen, setAddOpen] = useState(false);
   const [addName, setAddName] = useState("");
+  const [addBranch, setAddBranch] = useState("");
   const [addAddress, setAddAddress] = useState("");
   const [addGstin, setAddGstin] = useState("");
   const [addBusy, setAddBusy] = useState(false);
@@ -78,6 +80,7 @@ export default function CompaniesPage() {
 
   const resetAddForm = () => {
     setAddName("");
+    setAddBranch("");
     setAddAddress("");
     setAddGstin("");
   };
@@ -104,6 +107,7 @@ export default function CompaniesPage() {
         .insert({
           user_id: effectiveUserId,
           name,
+          branch: addBranch.trim() || null,
           address: addAddress.trim() || "",
           gstin: addGstin.trim() || null,
         })
@@ -183,7 +187,12 @@ export default function CompaniesPage() {
               return (
                 <Card key={company.id} className="border">
                   <CardContent className="p-4">
-                    <div className="space-y-0.5">
+                    <div className="space-y-1.5">
+                      {company.branch && (
+                        <Badge variant="secondary" className="w-fit text-xs">
+                          {company.branch}
+                        </Badge>
+                      )}
                       <p className="truncate font-semibold leading-snug">{company.name}</p>
                       {addrLines.slice(0, 2).map((line, i) => (
                         <p key={i} className="truncate text-sm text-muted-foreground">
@@ -254,6 +263,15 @@ export default function CompaniesPage() {
                 onChange={(e) => setAddName(e.target.value)}
                 placeholder="Company name"
                 autoComplete="organization"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="add-branch">Branch (optional)</Label>
+              <Input
+                id="add-branch"
+                value={addBranch}
+                onChange={(e) => setAddBranch(e.target.value)}
+                placeholder="e.g., Banjara Hills, Jubilee Hills"
               />
             </div>
             <div className="space-y-1">

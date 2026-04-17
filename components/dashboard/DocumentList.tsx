@@ -79,6 +79,11 @@ export function DocumentList({ documents, documentType }: DocumentListProps) {
 
             {/* Company info */}
             <div className="mt-1 space-y-1">
+              {doc.companies?.branch && (
+                <Badge variant="secondary" className="w-fit text-xs">
+                  {doc.companies.branch}
+                </Badge>
+              )}
               <p className="text-sm font-medium">
                 {doc.companies?.name ?? "Unknown company"}
               </p>

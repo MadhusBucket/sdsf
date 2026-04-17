@@ -211,7 +211,7 @@ export function DocumentPdfToolbar({ document }: DocumentPdfToolbarProps) {
             type="button"
             variant="outline"
             className="h-11"
-            onClick={() => router.push(`/create?type=${document.type}`)}
+            onClick={() => router.push(`/create?id=${document.id}`)}
           >
             <Edit className="mr-2 h-4 w-4" />
             Edit

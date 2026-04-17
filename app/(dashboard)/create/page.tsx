@@ -50,6 +50,7 @@ function captureWorkspaceSignature(): string {
 function CreatePageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const editId = searchParams.get("id");
   const typeParam = (searchParams.get("type") ?? "quotation") as DocumentType;
 
   const loadIdRef = useRef(0);
@@ -105,6 +106,29 @@ function CreatePageInner() {
       }
 
       const effectiveUserId = await getEffectiveUserId(supabase, user.id, user.email!);
+
+      // Editing a specific document — load it directly, skip draft search.
+      if (editId) {
+        const { data, error } = await supabase
+          .from("documents")
+          .select("*")
+          .eq("id", editId)
+          .eq("user_id", effectiveUserId)
+          .single();
+
+        if (loadId !== loadIdRef.current) return;
+
+        if (data && !error) {
+          setDraft(data as Document);
+          toast.message("Editing document");
+          snapshotPristine();
+        } else {
+          initializeDraft(typeParam);
+          toast.error("Document not found");
+          snapshotPristine();
+        }
+        return;
+      }
 
       const { data, error } = await supabase
         .from("documents")

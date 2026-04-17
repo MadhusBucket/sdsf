@@ -8,6 +8,7 @@ import type { Document } from "@/lib/types/database";
 export interface DashboardDocument extends Document {
   companies?: {
     name: string;
+    branch?: string | null;
     address?: string | null;
   } | null;
 }

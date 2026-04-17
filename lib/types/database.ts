@@ -35,6 +35,7 @@ export interface Company {
   id: string;
   user_id: string;
   name: string;
+  branch: string | null;
   address: string;
   gstin: string | null;
   created_at: string;
