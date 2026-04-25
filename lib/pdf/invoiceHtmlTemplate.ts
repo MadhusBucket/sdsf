@@ -171,7 +171,6 @@ body {
             font-size: 11px;
             font-weight: 700;
             margin-top: 12px;
-            letter-spacing: 0.2px;
         }
 
         /* METADATA BOX */

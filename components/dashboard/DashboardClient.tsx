@@ -14,6 +14,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
 import { getEffectiveUserId } from "@/lib/auth/sharedAccess";
 import type { DocumentType } from "@/lib/types/database";
@@ -34,6 +41,7 @@ export function DashboardClient() {
   const [status, setStatus] = useState<StatusFilterValue>("all");
   const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
   const [typePickerOpen, setTypePickerOpen] = useState(false);
+  const [kpiDateFilter, setKpiDateFilter] = useState<"today" | "7days" | "30days" | "all">("all");
 
   useEffect(() => {
     const supabase = createClient();
@@ -100,6 +108,32 @@ export function DashboardClient() {
       .filter((doc) => fuzzyMatchesDocument(doc, query));
   }, [documents, query, status, type, dateFilter]);
 
+  function filterDocumentsByDate(
+    docs: DashboardDocument[],
+    filter: "today" | "7days" | "30days" | "all",
+  ) {
+    if (filter === "all") return docs;
+
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    let cutoffDate: Date;
+    if (filter === "today") {
+      cutoffDate = startOfToday;
+    } else if (filter === "7days") {
+      cutoffDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    } else {
+      cutoffDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    }
+
+    return docs.filter((doc) => {
+      const docDate = new Date(doc.date || doc.created_at);
+      return docDate >= cutoffDate;
+    });
+  }
+
+  const filteredForKpi = filterDocumentsByDate(documents, kpiDateFilter);
+
   const handlePickType = (pickedType: DocumentType) => {
     setTypePickerOpen(false);
     router.push(`/create?type=${pickedType}`);
@@ -108,7 +142,23 @@ export function DashboardClient() {
   return (
     <>
       <div className="space-y-4 p-4 pb-28 sm:p-6">
-        <KPICards documents={documents} />
+        <div className="mb-4">
+          <Select
+            value={kpiDateFilter}
+            onValueChange={(v) => setKpiDateFilter(v as typeof kpiDateFilter)}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="today">Today</SelectItem>
+              <SelectItem value="7days">Last 7 days</SelectItem>
+              <SelectItem value="30days">Last 30 days</SelectItem>
+              <SelectItem value="all">All time</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <KPICards documents={filteredForKpi} />
         <DocumentToggle value={type} onChange={setType} />
         <SearchBar query={query} onChange={setQuery} />
         <div className="flex items-center justify-between">
