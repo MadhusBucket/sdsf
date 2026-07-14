@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { assertEmailAllowlisted } from "@/app/(auth)/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useSubmitLock } from "@/lib/hooks/useSubmitLock";
 import { createClient } from "@/lib/supabase/client";
 import { ensureProfile } from "@/lib/utils/ensureProfile";
 
@@ -17,11 +18,11 @@ export function MagicLinkForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [usePassword, setUsePassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const { busy: isLoading, run: runSubmit } = useSubmitLock();
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setErrorMessage("");
     setSuccessMessage("");
@@ -35,76 +36,74 @@ export function MagicLinkForm() {
       return;
     }
 
-    setIsLoading(true);
+    void runSubmit(async () => {
+      try {
+        const gate = await assertEmailAllowlisted(normalizedEmail);
+        if (!gate.ok) {
+          setErrorMessage("Access denied. This email is not authorized.");
+          return;
+        }
 
-    try {
-      const gate = await assertEmailAllowlisted(normalizedEmail);
-      if (!gate.ok) {
-        setErrorMessage("Access denied. This email is not authorized.");
-        return;
-      }
+        const supabase = createClient();
 
-      const supabase = createClient();
+        if (usePassword && password.trim()) {
+          const { error } = await supabase.auth.signInWithPassword({
+            email: normalizedEmail,
+            password: password.trim(),
+          });
 
-      if (usePassword && password.trim()) {
-        const { error } = await supabase.auth.signInWithPassword({
+          if (error) {
+            throw error;
+          }
+
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
+          if (user) {
+            const { error: profileError } = await ensureProfile(
+              supabase,
+              user.id,
+              user.email ?? null
+            );
+            if (profileError) {
+              console.error("ensureProfile after password login:", profileError);
+            }
+          }
+
+          router.replace("/dashboard");
+          router.refresh();
+          return;
+        }
+
+        if (usePassword && !password.trim()) {
+          const message = "Enter your password or turn off password login.";
+          setErrorMessage(message);
+          window.alert(message);
+          return;
+        }
+
+        const callbackUrl = `${window.location.origin}/api/auth/callback`;
+        const { error } = await supabase.auth.signInWithOtp({
           email: normalizedEmail,
-          password: password.trim(),
+          options: {
+            emailRedirectTo: callbackUrl,
+          },
         });
 
         if (error) {
           throw error;
         }
 
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (user) {
-          const { error: profileError } = await ensureProfile(
-            supabase,
-            user.id,
-            user.email ?? null
-          );
-          if (profileError) {
-            console.error("ensureProfile after password login:", profileError);
-          }
-        }
-
-        router.replace("/dashboard");
-        router.refresh();
-        return;
-      }
-
-      if (usePassword && !password.trim()) {
-        const message = "Enter your password or turn off password login.";
+        setSuccessMessage("Check your email for the magic link");
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Unable to send magic link. Please try again.";
         setErrorMessage(message);
         window.alert(message);
-        return;
       }
-
-      const callbackUrl = `${window.location.origin}/api/auth/callback`;
-      const { error } = await supabase.auth.signInWithOtp({
-        email: normalizedEmail,
-        options: {
-          emailRedirectTo: callbackUrl,
-        },
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      setSuccessMessage("Check your email for the magic link");
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Unable to send magic link. Please try again.";
-      setErrorMessage(message);
-      window.alert(message);
-    } finally {
-      setIsLoading(false);
-    }
+    });
   };
 
   return (

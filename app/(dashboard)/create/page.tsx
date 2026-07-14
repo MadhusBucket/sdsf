@@ -43,6 +43,7 @@ function captureWorkspaceSignature(): string {
     company_id: d.company_id,
     line_items: d.line_items,
     gstEnabled: d.gstEnabled,
+    gstType: d.gstType,
     editableDocNumber: ed,
   });
 }

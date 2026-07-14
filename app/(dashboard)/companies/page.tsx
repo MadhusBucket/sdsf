@@ -29,6 +29,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useSubmitLock } from "@/lib/hooks/useSubmitLock";
 import { createClient } from "@/lib/supabase/client";
 import { getEffectiveUserId } from "@/lib/auth/sharedAccess";
 import type { Company } from "@/lib/types/database";
@@ -50,12 +51,12 @@ export default function CompaniesPage() {
   const [addBranch, setAddBranch] = useState("");
   const [addAddress, setAddAddress] = useState("");
   const [addGstin, setAddGstin] = useState("");
-  const [addBusy, setAddBusy] = useState(false);
+  const { busy: addBusy, run: runAdd } = useSubmitLock();
 
   // Delete dialog
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
-  const [deleteBusy, setDeleteBusy] = useState(false);
-  const [deleteCheckBusy, setDeleteCheckBusy] = useState(false);
+  const { busy: deleteBusy, run: runDelete } = useSubmitLock();
+  const { busy: deleteCheckBusy, run: runDeleteCheck } = useSubmitLock();
 
   const loadCompanies = useCallback(async () => {
     const supabase = createClient();
@@ -85,20 +86,19 @@ export default function CompaniesPage() {
     setAddGstin("");
   };
 
-  const handleAddSave = async () => {
+  const handleAddSave = () => {
     const name = addName.trim();
     if (!name) { toast.error("Company name is required."); return; }
 
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) { toast.error("You must be signed in."); return; }
+    void runAdd(async () => {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) { toast.error("You must be signed in."); return; }
 
-    const effectiveUserId = await getEffectiveUserId(supabase, user.id, user.email!);
+      const effectiveUserId = await getEffectiveUserId(supabase, user.id, user.email!);
 
-    setAddBusy(true);
-    try {
       const { error: profileError } = await ensureProfile(supabase, effectiveUserId, user.email ?? null);
       if (profileError) { toast.error(profileError.message); return; }
 
@@ -122,26 +122,23 @@ export default function CompaniesPage() {
       setAddOpen(false);
       resetAddForm();
       toast.success("Company added");
-    } finally {
-      setAddBusy(false);
-    }
+    });
   };
 
-  const handleDeleteClick = async (company: Company) => {
-    setDeleteCheckBusy(true);
-    const supabase = createClient();
-    const { count } = await supabase
-      .from("documents")
-      .select("*", { count: "exact", head: true })
-      .eq("company_id", company.id);
-    setDeleteCheckBusy(false);
-    setDeleteTarget({ company, docCount: count ?? 0 });
+  const handleDeleteClick = (company: Company) => {
+    void runDeleteCheck(async () => {
+      const supabase = createClient();
+      const { count } = await supabase
+        .from("documents")
+        .select("*", { count: "exact", head: true })
+        .eq("company_id", company.id);
+      setDeleteTarget({ company, docCount: count ?? 0 });
+    });
   };
 
-  const handleDeleteConfirm = async () => {
+  const handleDeleteConfirm = () => {
     if (!deleteTarget) return;
-    setDeleteBusy(true);
-    try {
+    void runDelete(async () => {
       const supabase = createClient();
       const { error } = await supabase
         .from("companies")
@@ -151,9 +148,7 @@ export default function CompaniesPage() {
       setCompanies((prev) => prev.filter((c) => c.id !== deleteTarget.company.id));
       setDeleteTarget(null);
       toast.success("Company deleted");
-    } finally {
-      setDeleteBusy(false);
-    }
+    });
   };
 
   return (
@@ -217,7 +212,7 @@ export default function CompaniesPage() {
                         variant="destructive"
                         className="h-11 w-full"
                         disabled={deleteCheckBusy}
-                        onClick={() => void handleDeleteClick(company)}
+                        onClick={() => handleDeleteClick(company)}
                       >
                         <Trash2 className="mr-2 h-4 w-4" />
                         Delete
@@ -263,6 +258,7 @@ export default function CompaniesPage() {
                 onChange={(e) => setAddName(e.target.value)}
                 placeholder="Company name"
                 autoComplete="organization"
+                disabled={addBusy}
               />
             </div>
             <div className="space-y-1">
@@ -272,6 +268,7 @@ export default function CompaniesPage() {
                 value={addBranch}
                 onChange={(e) => setAddBranch(e.target.value)}
                 placeholder="e.g., Banjara Hills, Jubilee Hills"
+                disabled={addBusy}
               />
             </div>
             <div className="space-y-1">
@@ -283,6 +280,7 @@ export default function CompaniesPage() {
                 onChange={(e) => setAddAddress(e.target.value)}
                 placeholder="Street, city, state"
                 className="resize-y text-base"
+                disabled={addBusy}
               />
             </div>
             <div className="space-y-1">
@@ -292,6 +290,7 @@ export default function CompaniesPage() {
                 value={addGstin}
                 onChange={(e) => setAddGstin(e.target.value)}
                 placeholder="GSTIN"
+                disabled={addBusy}
               />
             </div>
           </div>
@@ -307,7 +306,7 @@ export default function CompaniesPage() {
             <Button
               type="button"
               disabled={addBusy}
-              onClick={() => void handleAddSave()}
+              onClick={handleAddSave}
             >
               {addBusy ? "Saving…" : "Save"}
             </Button>
@@ -338,7 +337,10 @@ export default function CompaniesPage() {
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={deleteBusy}
-              onClick={() => void handleDeleteConfirm()}
+              onClick={(e) => {
+                e.preventDefault();
+                handleDeleteConfirm();
+              }}
             >
               {deleteBusy ? "Deleting…" : "Delete"}
             </AlertDialogAction>

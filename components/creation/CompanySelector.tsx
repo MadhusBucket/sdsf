@@ -18,6 +18,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/client";
 import { getEffectiveUserId } from "@/lib/auth/sharedAccess";
+import { useSubmitLock } from "@/lib/hooks/useSubmitLock";
 import type { Company } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
 import { ensureProfile } from "@/lib/utils/ensureProfile";
@@ -37,6 +38,7 @@ export function CompanySelector({ value, onChange }: CompanySelectorProps) {
   const [newBranch, setNewBranch] = useState("");
   const [newAddress, setNewAddress] = useState("");
   const [newGstin, setNewGstin] = useState("");
+  const { busy: saving, run: runSave } = useSubmitLock();
 
   const loadCompanies = useCallback(async () => {
     const supabase = createClient();
@@ -109,69 +111,69 @@ export function CompanySelector({ value, onChange }: CompanySelectorProps) {
     setSearchQuery("");
   };
 
-  const handleSaveNew = async () => {
+  const handleSaveNew = () => {
     const name = newName.trim();
     if (!name) {
       toast.error("Company name is required.");
       return;
     }
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      toast.error("You must be signed in to add a company.");
-      return;
-    }
 
-    const effectiveUserId = await getEffectiveUserId(supabase, user.id, user.email!);
-
-    setLoading(true);
-    const { error: profileError } = await ensureProfile(
-      supabase,
-      effectiveUserId,
-      user.email ?? null
-    );
-    if (profileError) {
-      setLoading(false);
-      toast.error(profileError.message);
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from("companies")
-      .insert({
-        user_id: effectiveUserId,
-        name,
-        branch: newBranch.trim() || null,
-        address: newAddress.trim() || "",
-        gstin: newGstin.trim() || null,
-      })
-      .select()
-      .single();
-    setLoading(false);
-    if (error) {
-      const fk =
-        error.code === "23503" ||
-        /foreign key|violates foreign key/i.test(error.message);
-      if (fk) {
-        toast.error(
-          "Session expired. Please log out and log back in."
-        );
-      } else {
-        toast.error(error.message);
+    void runSave(async () => {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("You must be signed in to add a company.");
+        return;
       }
-      return;
-    }
-    const company = data as Company;
-    setCompanies((prev) =>
-      [...prev, company].sort((a, b) => a.name.localeCompare(b.name))
-    );
-    onChange(company.id);
-    resetAddForm();
-    setSearchQuery("");
-    setOpen(false);
-    toast.success("Company saved");
+
+      const effectiveUserId = await getEffectiveUserId(supabase, user.id, user.email!);
+
+      const { error: profileError } = await ensureProfile(
+        supabase,
+        effectiveUserId,
+        user.email ?? null
+      );
+      if (profileError) {
+        toast.error(profileError.message);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("companies")
+        .insert({
+          user_id: effectiveUserId,
+          name,
+          branch: newBranch.trim() || null,
+          address: newAddress.trim() || "",
+          gstin: newGstin.trim() || null,
+        })
+        .select()
+        .single();
+      if (error) {
+        const fk =
+          error.code === "23503" ||
+          /foreign key|violates foreign key/i.test(error.message);
+        if (fk) {
+          toast.error(
+            "Session expired. Please log out and log back in."
+          );
+        } else {
+          toast.error(error.message);
+        }
+        return;
+      }
+      const company = data as Company;
+      setCompanies((prev) =>
+        [...prev, company].sort((a, b) => a.name.localeCompare(b.name))
+      );
+      onChange(company.id);
+      resetAddForm();
+      setSearchQuery("");
+      setOpen(false);
+      toast.success("Company saved");
+    });
   };
 
   return (
@@ -251,6 +253,7 @@ export function CompanySelector({ value, onChange }: CompanySelectorProps) {
                   type="button"
                   variant="outline"
                   className="h-11 flex-1"
+                  disabled={saving}
                   onClick={handleCancelAdd}
                 >
                   Cancel
@@ -258,10 +261,10 @@ export function CompanySelector({ value, onChange }: CompanySelectorProps) {
                 <Button
                   type="button"
                   className="h-12 flex-1"
-                  disabled={loading}
-                  onClick={() => void handleSaveNew()}
+                  disabled={saving}
+                  onClick={handleSaveNew}
                 >
-                  Save
+                  {saving ? "Saving…" : "Save"}
                 </Button>
               </div>
             </div>

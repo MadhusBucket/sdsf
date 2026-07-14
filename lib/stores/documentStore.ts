@@ -8,6 +8,8 @@ import {
   calculateGrandTotal,
   calculateLineTotal,
   calculateSubtotal,
+  inferGstFromDocument,
+  type GstType,
 } from "@/lib/utils/calculations";
 import {
   formatDocNumber,
@@ -38,6 +40,8 @@ export interface DocumentDraft {
   igst_amount: number;
   grand_total: number;
   gstEnabled: boolean;
+  /** intra = CGST+SGST (within state); inter = IGST (across state) */
+  gstType: GstType;
 }
 
 const DEFAULT_UNIT: Unit = "NOS";
@@ -73,11 +77,22 @@ export function computeTotals(draft: DocumentDraft): DocumentDraft {
   const line_items = applyLineAmounts(draft.line_items);
   const subtotal = calculateSubtotal(line_items);
   const gstEnabled = draft.gstEnabled;
-  const cgst_rate = gstEnabled ? 9 : 0;
-  const sgst_rate = gstEnabled ? 9 : 0;
-  const cgst_amount = gstEnabled ? calculateGST(subtotal, 9) : 0;
-  const sgst_amount = gstEnabled ? calculateGST(subtotal, 9) : 0;
-  const grand_total = calculateGrandTotal(subtotal, cgst_amount, sgst_amount);
+  const gstType: GstType = draft.gstType ?? "intra";
+  const isIntra = gstEnabled && gstType === "intra";
+  const isInter = gstEnabled && gstType === "inter";
+
+  const cgst_rate = isIntra ? 9 : 0;
+  const sgst_rate = isIntra ? 9 : 0;
+  const igst_rate = isInter ? 18 : 0;
+  const cgst_amount = isIntra ? calculateGST(subtotal, 9) : 0;
+  const sgst_amount = isIntra ? calculateGST(subtotal, 9) : 0;
+  const igst_amount = isInter ? calculateGST(subtotal, 18) : 0;
+  const grand_total = calculateGrandTotal(
+    subtotal,
+    cgst_amount,
+    sgst_amount,
+    igst_amount
+  );
 
   return {
     ...draft,
@@ -87,14 +102,15 @@ export function computeTotals(draft: DocumentDraft): DocumentDraft {
     cgst_amount,
     sgst_rate,
     sgst_amount,
-    igst_rate: 0,
-    igst_amount: 0,
+    igst_rate,
+    igst_amount,
     grand_total,
+    gstType,
   };
 }
 
 function documentRowToDraft(doc: Document): DocumentDraft {
-  const gstEnabled = doc.cgst_amount > 0 || doc.sgst_amount > 0;
+  const { gstEnabled, gstType } = inferGstFromDocument(doc);
   const line_items =
     doc.items.length > 0
       ? renumberItems(
@@ -130,6 +146,7 @@ function documentRowToDraft(doc: Document): DocumentDraft {
     igst_amount: 0,
     grand_total: 0,
     gstEnabled,
+    gstType,
   });
 }
 
@@ -154,6 +171,7 @@ function createFreshDraft(type: DocumentType = "quotation"): DocumentDraft {
     igst_amount: 0,
     grand_total: 0,
     gstEnabled: false,
+    gstType: "intra",
   });
 }
 
@@ -180,6 +198,7 @@ interface DocumentStore {
   setTitle: (title: string | null) => void;
   setCompanyId: (company_id: string | null) => void;
   setGstEnabled: (gstEnabled: boolean) => void;
+  setGstType: (gstType: GstType) => void;
   setLineItems: (items: LineItem[]) => void;
   addLineItem: (item?: Partial<LineItem>) => void;
   updateLineItem: (slNo: number, updates: Partial<LineItem>) => void;
@@ -346,6 +365,11 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
       draft: computeTotals({ ...state.draft, gstEnabled }),
     })),
 
+  setGstType: (gstType) =>
+    set((state) => ({
+      draft: computeTotals({ ...state.draft, gstType }),
+    })),
+
   setLineItems: (items) =>
     set((state) => ({
       draft: computeTotals({
@@ -420,62 +444,80 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
   saveToSupabase: async () => {
     const { draft } = get();
     if (!draft.company_id) return;
-
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const effectiveUserId = await getEffectiveUserId(supabase, user.id, user.email!);
-
-    const advance_received = 0;
-    const balance_due = roundTo2(draft.grand_total - advance_received);
-    const basePayload = {
-      user_id: effectiveUserId,
-      type: draft.type,
-      doc_number: draft.number,
-      date: draft.issue_date,
-      po_number: draft.po_number,
-      subject: draft.title,
-      company_id: draft.company_id,
-      items: draft.line_items,
-      subtotal: draft.subtotal,
-      cgst_amount: draft.cgst_amount,
-      sgst_amount: draft.sgst_amount,
-      round_off: 0,
-      grand_total: draft.grand_total,
-      advance_received,
-      balance_due,
-      status: "draft" as const,
-      signature_url: null as string | null,
-      drive_file_id: null as string | null,
-    };
+    if (saveInFlight) {
+      saveQueued = true;
+      return;
+    }
+    saveInFlight = true;
 
     try {
-      if (draft.id) {
-        const updatePayload = { id: draft.id, ...basePayload };
-        const { error } = await supabase
-          .from("documents")
-          .update(updatePayload)
-          .eq("id", draft.id);
-        if (error) console.error("saveToSupabase update:", error.message);
-      } else {
-        const { data, error } = await supabase
-          .from("documents")
-          .insert(basePayload)
-          .select("id")
-          .single();
-        if (error) {
-          console.error("saveToSupabase insert:", error.message);
-          return;
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const effectiveUserId = await getEffectiveUserId(
+        supabase,
+        user.id,
+        user.email!
+      );
+
+      const advance_received = 0;
+      const balance_due = roundTo2(draft.grand_total - advance_received);
+      // IGST is encoded as tax in grand_total with cgst/sgst at 0 (no DB column).
+      const basePayload = {
+        user_id: effectiveUserId,
+        type: draft.type,
+        doc_number: draft.number,
+        date: draft.issue_date,
+        po_number: draft.po_number,
+        subject: draft.title,
+        company_id: draft.company_id,
+        items: draft.line_items,
+        subtotal: draft.subtotal,
+        cgst_amount: draft.cgst_amount,
+        sgst_amount: draft.sgst_amount,
+        round_off: 0,
+        grand_total: draft.grand_total,
+        advance_received,
+        balance_due,
+        status: "draft" as const,
+        signature_url: null as string | null,
+        drive_file_id: null as string | null,
+      };
+
+      try {
+        if (draft.id) {
+          const updatePayload = { id: draft.id, ...basePayload };
+          const { error } = await supabase
+            .from("documents")
+            .update(updatePayload)
+            .eq("id", draft.id);
+          if (error) console.error("saveToSupabase update:", error.message);
+        } else {
+          const { data, error } = await supabase
+            .from("documents")
+            .insert(basePayload)
+            .select("id")
+            .single();
+          if (error) {
+            console.error("saveToSupabase insert:", error.message);
+            return;
+          }
+          if (data?.id) {
+            set((s) => ({ draft: { ...s.draft, id: data.id } }));
+          }
         }
-        if (data?.id) {
-          set((s) => ({ draft: { ...s.draft, id: data.id } }));
-        }
+      } catch (e) {
+        console.error("saveToSupabase", e);
       }
-    } catch (e) {
-      console.error("saveToSupabase", e);
+    } finally {
+      saveInFlight = false;
+      if (saveQueued) {
+        saveQueued = false;
+        void get().saveToSupabase();
+      }
     }
   },
 
@@ -486,6 +528,8 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
     }),
 }));
 
+let saveInFlight = false;
+let saveQueued = false;
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
 useDocumentStore.subscribe((state, prev) => {
   if (prev === undefined) return;

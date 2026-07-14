@@ -33,6 +33,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useSubmitLock } from "@/lib/hooks/useSubmitLock";
 import { createClient } from "@/lib/supabase/client";
 import type { Document } from "@/lib/types/database";
 
@@ -50,7 +51,7 @@ const STATUS_LABELS: Record<Document["status"], string> = {
 
 export function DocumentPdfToolbar({ document }: DocumentPdfToolbarProps) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
+  const { busy, run: runBusy } = useSubmitLock();
   const [pendingStatus, setPendingStatus] = useState<Document["status"] | null>(null);
 
   const docWord = document.type === "invoice" ? "invoice" : "quotation";
@@ -110,27 +111,30 @@ export function DocumentPdfToolbar({ document }: DocumentPdfToolbarProps) {
     setPendingStatus(status);
   };
 
-  const confirmStatusChange = async () => {
+  const confirmStatusChange = () => {
     if (!pendingStatus) return;
+    const nextStatus = pendingStatus;
 
-    const supabase = createClient();
-    setBusy(true);
-    try {
-      const { error } = await supabase
-        .from("documents")
-        .update({ status: pendingStatus })
-        .eq("id", document.id);
+    void runBusy(async () => {
+      try {
+        const supabase = createClient();
+        const { error } = await supabase
+          .from("documents")
+          .update({ status: nextStatus })
+          .eq("id", document.id);
 
-      if (error) throw error;
+        if (error) throw error;
 
-      toast.success(`Document marked as ${STATUS_LABELS[pendingStatus].toLowerCase()}`);
-      router.refresh();
-    } catch (e) {
-      toast.error("Failed to update status");
-    } finally {
-      setBusy(false);
-      setPendingStatus(null);
-    }
+        toast.success(
+          `Document marked as ${STATUS_LABELS[nextStatus].toLowerCase()}`
+        );
+        router.refresh();
+      } catch {
+        toast.error("Failed to update status");
+      } finally {
+        setPendingStatus(null);
+      }
+    });
   };
 
   const hasStatusActions =
@@ -241,7 +245,10 @@ export function DocumentPdfToolbar({ document }: DocumentPdfToolbarProps) {
                   ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   : undefined
               }
-              onClick={() => void confirmStatusChange()}
+              onClick={(e) => {
+                e.preventDefault();
+                confirmStatusChange();
+              }}
             >
               {busy ? "Saving…" : "Confirm"}
             </AlertDialogAction>

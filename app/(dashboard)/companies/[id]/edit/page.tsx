@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/client";
 import { getEffectiveUserId } from "@/lib/auth/sharedAccess";
+import { useSubmitLock } from "@/lib/hooks/useSubmitLock";
 import type { Company } from "@/lib/types/database";
 
 export default function EditCompanyPage() {
@@ -25,7 +26,7 @@ export default function EditCompanyPage() {
   const [branch, setBranch] = useState("");
   const [address, setAddress] = useState("");
   const [gstin, setGstin] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
+  const { busy: isSaving, run: runSave } = useSubmitLock();
 
   useEffect(() => {
     void (async () => {
@@ -60,12 +61,11 @@ export default function EditCompanyPage() {
     })();
   }, [companyId, router]);
 
-  const handleSave = async () => {
+  const handleSave = () => {
     const trimmedName = name.trim();
     if (!trimmedName) { toast.error("Company name is required."); return; }
 
-    setIsSaving(true);
-    try {
+    void runSave(async () => {
       const supabase = createClient();
       const { error } = await supabase
         .from("companies")
@@ -80,9 +80,7 @@ export default function EditCompanyPage() {
       if (error) { toast.error(error.message); return; }
       toast.success("Company updated");
       router.push("/companies");
-    } finally {
-      setIsSaving(false);
-    }
+    });
   };
 
   if (isLoading) {

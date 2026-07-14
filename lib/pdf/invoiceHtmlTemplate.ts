@@ -39,7 +39,40 @@ export function buildInvoiceHtml(p: InvoiceHtmlPayload): string {
   const cgst = doc.cgst_amount ?? 0;
   const sgst = doc.sgst_amount ?? 0;
   const grandTotal = doc.grand_total ?? 0;
+  const roundOff = doc.round_off ?? 0;
+  const impliedIgst =
+    cgst <= 0 && sgst <= 0
+      ? Math.round(((grandTotal - subtotal - roundOff) + Number.EPSILON) * 100) /
+        100
+      : 0;
   const subject = doc.subject?.trim();
+
+  const taxRows =
+    cgst > 0 || sgst > 0
+      ? `
+            <div class="total-row">
+                <span>CGST (9%)</span>
+                <span class="bold-num">${escapeHtml(formatIndianCurrency(cgst))}</span>
+            </div>
+            <div class="total-row">
+                <span>SGST (9%)</span>
+                <span class="bold-num">${escapeHtml(formatIndianCurrency(sgst))}</span>
+            </div>`
+      : impliedIgst > 0
+        ? `
+            <div class="total-row">
+                <span>IGST (18%)</span>
+                <span class="bold-num">${escapeHtml(formatIndianCurrency(impliedIgst))}</span>
+            </div>`
+        : `
+            <div class="total-row">
+                <span>CGST (9%)</span>
+                <span class="bold-num">${escapeHtml(formatIndianCurrency(0))}</span>
+            </div>
+            <div class="total-row">
+                <span>SGST (9%)</span>
+                <span class="bold-num">${escapeHtml(formatIndianCurrency(0))}</span>
+            </div>`;
 
   const merchantGstin = merchant.gstin?.trim() || "N/A";
   const billGstin = company.gstin?.trim() || "N/A";
@@ -459,14 +492,7 @@ body {
                 <span>Subtotal</span>
                 <span class="bold-num">${escapeHtml(formatIndianCurrency(subtotal))}</span>
             </div>
-            <div class="total-row">
-                <span>CGST (9%)</span>
-                <span class="bold-num">${escapeHtml(formatIndianCurrency(cgst))}</span>
-            </div>
-            <div class="total-row">
-                <span>SGST (9%)</span>
-                <span class="bold-num">${escapeHtml(formatIndianCurrency(sgst))}</span>
-            </div>
+            ${taxRows}
             <div class="total-row main">
                 <span>TOTAL</span>
                 <span>${escapeHtml(formatIndianCurrency(grandTotal))}</span>

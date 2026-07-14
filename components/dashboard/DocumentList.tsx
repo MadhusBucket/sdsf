@@ -48,7 +48,12 @@ export function DocumentList({ documents, documentType }: DocumentListProps) {
           ?.split("\n")
           .map((l) => l.trim())
           .filter(Boolean) ?? [];
-        const hasGst = (doc.cgst_amount ?? 0) > 0 || (doc.sgst_amount ?? 0) > 0;
+        const hasIntraGst =
+          (doc.cgst_amount ?? 0) > 0 || (doc.sgst_amount ?? 0) > 0;
+        const hasInterGst =
+          !hasIntraGst &&
+          (doc.grand_total ?? 0) - (doc.subtotal ?? 0) - (doc.round_off ?? 0) > 0;
+        const hasGst = hasIntraGst || hasInterGst;
 
         return (
           <Link
