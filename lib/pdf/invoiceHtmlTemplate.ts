@@ -2,6 +2,7 @@ import { format } from "date-fns";
 
 import type { BankDetails, MerchantDetails } from "@/lib/pdf/merchantFromEnv";
 import type { Company, Document, LineItem } from "@/lib/types/database";
+import { inferGstFromDocument } from "@/lib/utils/calculations";
 import { formatIndianCurrency } from "@/lib/utils/formatting";
 
 import { escapeHtml } from "./escapeHtml";
@@ -40,16 +41,37 @@ export function buildInvoiceHtml(p: InvoiceHtmlPayload): string {
   const sgst = doc.sgst_amount ?? 0;
   const grandTotal = doc.grand_total ?? 0;
   const roundOff = doc.round_off ?? 0;
+  const { gstEnabled, gstType } = inferGstFromDocument({
+    subtotal,
+    cgst_amount: cgst,
+    sgst_amount: sgst,
+    grand_total: grandTotal,
+    round_off: roundOff,
+  });
   const impliedIgst =
-    cgst <= 0 && sgst <= 0
+    gstEnabled && gstType === "inter"
       ? Math.round(((grandTotal - subtotal - roundOff) + Number.EPSILON) * 100) /
         100
       : 0;
   const subject = doc.subject?.trim();
 
-  const taxRows =
-    cgst > 0 || sgst > 0
+  const subtotalRow = gstEnabled
+    ? `
+            <div class="total-row">
+                <span>Subtotal</span>
+                <span class="bold-num">${escapeHtml(formatIndianCurrency(subtotal))}</span>
+            </div>`
+    : "";
+
+  const taxRows = !gstEnabled
+    ? ""
+    : gstType === "inter"
       ? `
+            <div class="total-row">
+                <span>IGST (18%)</span>
+                <span class="bold-num">${escapeHtml(formatIndianCurrency(impliedIgst))}</span>
+            </div>`
+      : `
             <div class="total-row">
                 <span>CGST (9%)</span>
                 <span class="bold-num">${escapeHtml(formatIndianCurrency(cgst))}</span>
@@ -57,21 +79,6 @@ export function buildInvoiceHtml(p: InvoiceHtmlPayload): string {
             <div class="total-row">
                 <span>SGST (9%)</span>
                 <span class="bold-num">${escapeHtml(formatIndianCurrency(sgst))}</span>
-            </div>`
-      : impliedIgst > 0
-        ? `
-            <div class="total-row">
-                <span>IGST (18%)</span>
-                <span class="bold-num">${escapeHtml(formatIndianCurrency(impliedIgst))}</span>
-            </div>`
-        : `
-            <div class="total-row">
-                <span>CGST (9%)</span>
-                <span class="bold-num">${escapeHtml(formatIndianCurrency(0))}</span>
-            </div>
-            <div class="total-row">
-                <span>SGST (9%)</span>
-                <span class="bold-num">${escapeHtml(formatIndianCurrency(0))}</span>
             </div>`;
 
   const merchantGstin = merchant.gstin?.trim() || "N/A";
@@ -488,10 +495,7 @@ body {
 
     <div class="totals-container">
         <div class="totals-box">
-            <div class="total-row">
-                <span>Subtotal</span>
-                <span class="bold-num">${escapeHtml(formatIndianCurrency(subtotal))}</span>
-            </div>
+            ${subtotalRow}
             ${taxRows}
             <div class="total-row main">
                 <span>TOTAL</span>
