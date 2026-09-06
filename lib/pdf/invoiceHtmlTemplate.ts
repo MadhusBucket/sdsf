@@ -334,9 +334,9 @@ body {
         }
 
         .item-sub {
-            font-size: 13px;
-            font-weight: 700;
-            color: #000;
+            font-size: 12px;
+            font-weight: 500;
+            color: #444;
             line-height: 1.5;
         }
 
@@ -348,9 +348,9 @@ body {
             }
 
             .item-sub {
-                font-size: 13px;
-                font-weight: 700;
-                color: #000;
+                font-size: 12px;
+                font-weight: 500;
+                color: #333;
             }
         }
 
