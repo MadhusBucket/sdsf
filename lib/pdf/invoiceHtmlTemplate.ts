@@ -326,16 +326,32 @@ body {
         }
 
         .item-title {
-            font-weight: 600;
-            font-size: 12px;
+            font-weight: 700;
+            font-size: 13px;
+            color: #000;
             display: block;
             margin-bottom: 4px;
         }
 
         .item-sub {
-            font-size: 12px;
-            color: #666;
+            font-size: 13px;
+            font-weight: 700;
+            color: #000;
             line-height: 1.5;
+        }
+
+        @media print {
+            .item-title {
+                font-size: 14px;
+                font-weight: 700;
+                color: #000;
+            }
+
+            .item-sub {
+                font-size: 13px;
+                font-weight: 700;
+                color: #000;
+            }
         }
 
         .text-right { text-align: right; }
