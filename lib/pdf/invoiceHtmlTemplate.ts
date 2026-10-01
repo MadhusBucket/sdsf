@@ -327,14 +327,14 @@ body {
 
         .item-title {
             font-weight: 700;
-            font-size: 13px;
+            font-size: 14px;
             color: #000;
             display: block;
             margin-bottom: 4px;
         }
 
         .item-sub {
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 500;
             color: #444;
             line-height: 1.5;
@@ -342,21 +342,22 @@ body {
 
         @media print {
             .item-title {
-                font-size: 14px;
+                font-size: 15px;
                 font-weight: 700;
                 color: #000;
             }
 
             .item-sub {
-                font-size: 12px;
+                font-size: 13px;
                 font-weight: 500;
                 color: #333;
             }
         }
 
         .text-right { text-align: right; }
-        .text-center { text-align: center; font-size: 11px; justify-content: center; }
+        .text-center { text-align: center; font-size: 12px; justify-content: center; }
         .bold-num { font-weight: 500; font-size: 11px; }
+        td.bold-num { font-weight: 600; font-size: 12px; }
         
 
         /* TOTALS */
