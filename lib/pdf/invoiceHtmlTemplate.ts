@@ -160,7 +160,7 @@ export function buildInvoiceHtml(p: InvoiceHtmlPayload): string {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${escapeHtml(doc.doc_number ?? "")}</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
 
         * {
             margin: 0;
@@ -358,6 +358,7 @@ body {
         .text-center { text-align: center; font-size: 12px; justify-content: center; }
         .bold-num { font-weight: 500; font-size: 11px; }
         td.bold-num { font-weight: 600; font-size: 12px; }
+        .total-row .bold-num { font-weight: 600; font-size: 12px; }
         
 
         /* TOTALS */
