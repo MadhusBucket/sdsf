@@ -98,13 +98,12 @@ function eventWords(e: BillEvent, totals: Record<string, number>) {
   const full = e.paymentId ? totals[e.paymentId] : undefined;
   const detail =
     e.kind === "writeoff"
-      ? `Remaining ${inr(e.amount)} not charged; bill closed`
+      ? "not charged; bill closed"
       : e.kind === "marked"
         ? ""
         : [
             e.mode ? MODE_LABELS[e.mode] : "",
             e.reference ?? "",
-            e.tds > 0 ? `incl. TDS ${inr(e.tds)} deducted by you` : "",
             full && Math.round(full * 100) > Math.round(e.amount * 100) ? `part of ${inr(full)} paid` : "",
           ]
             .filter(Boolean)
@@ -136,186 +135,275 @@ function pageSetup(ws: Worksheet, headRow: number) {
   ws.headerFooter = { oddFooter: "&L&8&K71717APage &P of &N" };
 }
 
-function tableHead(ws: Worksheet, row: number, labels: string[], rightFrom: number) {
-  const r = ws.getRow(row);
-  labels.forEach((label, i) => {
-    const c = r.getCell(i + 1);
-    c.value = label;
-    c.font = font({ size: 10, bold: true, color: MUTED });
-    c.fill = fill(HEAD_BG);
-    c.border = { top: { style: "thin", color: { argb: LINE } }, bottom: { style: "thin", color: { argb: LINE } } };
-    c.alignment = { vertical: "middle", horizontal: i >= rightFrom ? "right" : "left", wrapText: true };
-  });
-  r.height = 24;
-}
-
 /** Rough row height so wrapped text is never cut off. */
 const heightFor = (texts: [string, number][]) =>
-  Math.max(20, Math.max(...texts.map(([t, width]) => (t || "").split("\n").reduce((n, l) => n + Math.max(1, Math.ceil(l.length / width)), 0))) * 15 + 6);
+  Math.max(
+    20,
+    Math.max(...texts.map(([t, width]) => (t || "").split("\n").reduce((n, l) => n + Math.max(1, Math.ceil(l.length / (width * 1.2))), 0))) * 14 + 6
+  );
+
+/* Table look for the statement */
+const HEAD_DARK = "FF27272A";
+const RED = "FFB91C1C";
+const RED_BG = "FFFEE2E2";
+const RED_SOFT = "FFFFF5F5";
+const GREEN_BG = "FFDCFCE7";
+const GRID: Partial<Borders> = {
+  top: { style: "thin", color: { argb: LINE } },
+  bottom: { style: "thin", color: { argb: LINE } },
+  left: { style: "thin", color: { argb: LINE } },
+  right: { style: "thin", color: { argb: LINE } },
+};
+
+/** The balance cell: red while something is due, green "Nil" when cleared. */
+function balanceCell(cell: Cell, value: number, strong: boolean) {
+  if (Math.round(value * 100) <= 0) {
+    cell.value = "Nil";
+    cell.font = font({ bold: strong, color: GREEN, size: strong ? 11 : 10 });
+    cell.fill = fill(strong ? GREEN_BG : SOFT_BG);
+    cell.alignment = { horizontal: "right", vertical: "top" };
+    return;
+  }
+  money(cell, value, { bold: strong, color: RED, size: strong ? 11 : 10 });
+  cell.fill = fill(strong ? RED_BG : RED_SOFT);
+}
 
 function statementSheet(ws: Worksheet, input: ExportInput) {
   const { business: b, bills } = input;
   const today = formatDay(todayISO());
   ws.columns = [
-    { width: 15 }, // A Bill no
-    { width: 13 }, // B Bill date
-    { width: 30 }, // C Site: branch and full address
-    { width: 36 }, // D Work / payment
-    { width: 16 }, // E Bill amount
-    { width: 16 }, // F Paid
-    { width: 16 }, // G Balance
+    { width: 5 }, // A #
+    { width: 15 }, // B Bill no.
+    { width: 13 }, // C Date
+    { width: 28 }, // D Site
+    { width: 34 }, // E Details
+    { width: 15 }, // F Bill amount
+    { width: 15 }, // G Paid
+    { width: 16 }, // H Balance
   ];
-  header(ws, b, "G");
 
-  // Who it is for
-  line(ws, 6, "A", "D", "PAYMENT STATEMENT", { size: 10, bold: true, color: BRAND });
-  line(ws, 7, "A", "D", input.client.name, { size: 14, bold: true }, 22);
-  line(ws, 6, "E", "G", `Date: ${today}`, { size: 10, color: MUTED }).alignment = { horizontal: "right" };
-  const billWord = bills.length === 1 ? `Bill ${bills[0].docNumber}` : `${bills.length} bills`;
-  line(ws, 7, "E", "G", billWord, { size: 10, color: MUTED }).alignment = { horizontal: "right", vertical: "middle" };
+  // ----- Heading: who it is from, what it is -----
+  line(ws, 1, "A", "E", b.name || "Statement", { size: 16, bold: true }, 26);
+  line(ws, 1, "F", "H", "PAYMENT STATEMENT", { size: 13, bold: true, color: BRAND }).alignment = { horizontal: "right", vertical: "middle" };
+  if (b.address) line(ws, 2, "A", "E", b.address, { size: 9, color: MUTED });
+  line(ws, 2, "F", "H", `Date: ${today}`, { size: 10, color: MUTED }).alignment = { horizontal: "right", vertical: "middle" };
+  const contact = [b.gstin ? `GSTIN ${b.gstin}` : "", b.phone ? `Phone ${b.phone}` : "", b.email].filter(Boolean).join("   ·   ");
+  if (contact) line(ws, 3, "A", "E", contact, { size: 9, color: MUTED });
+  const which = bills.length <= 3 ? bills.map((x) => x.docNumber).join(", ") : `${bills.length} bills`;
+  line(ws, 3, "F", "H", which, { size: 10, color: MUTED }).alignment = { horizontal: "right", vertical: "middle", wrapText: true };
+  ws.mergeCells("A4:H4");
+  ws.getCell("A4").border = bottom(BRAND, "medium");
+  ws.getRow(4).height = 6;
 
-  // The one number the client looks for
-  const billed = bills.reduce((s, x) => s + x.total, 0);
-  const paid = bills.reduce((s, x) => s + x.received, 0);
-  const waived = bills.reduce((s, x) => s + x.writtenOff, 0);
-  const due = bills.reduce((s, x) => s + x.pending, 0);
+  // ----- Who it is for -----
+  line(ws, 6, "A", "E", "Statement for", { size: 9, color: MUTED });
+  line(ws, 7, "A", "E", input.client.name, { size: 14, bold: true }, 22);
+
+  // ----- The three numbers -----
+  const billed = bills.reduce((s2, x) => s2 + x.total, 0);
+  const paid = bills.reduce((s2, x) => s2 + x.received, 0);
+  const due = bills.reduce((s2, x) => s2 + x.pending, 0);
   const net = Math.max(0, Math.round((due - input.advanceWithUs) * 100) / 100);
-  ws.mergeCells("A10:C10");
-  ws.mergeCells("A11:C11");
-  const dueLabel = ws.getCell("A10");
-  const dueValue = ws.getCell("A11");
-  dueLabel.value = "Balance due";
-  dueLabel.font = font({ size: 10, color: MUTED });
-  if (net > 0) {
-    money(dueValue, net, { size: 20, bold: true });
-    dueValue.alignment = { horizontal: "left", vertical: "middle" };
-  } else {
-    dueValue.value = "Nil — fully paid. Thank you!";
-    dueValue.font = font({ size: 16, bold: true, color: GREEN });
-  }
-  ws.getRow(11).height = 30;
-  line(ws, 10, "E", "G", `Billed ${inr(billed)}   ·   Paid ${inr(paid)}${waived > 0 ? `   ·   Waived ${inr(waived)}` : ""}`, {
-    size: 10,
-    color: MUTED,
-  }).alignment = { horizontal: "right", vertical: "middle", wrapText: true };
+  const box = (from: string, to: string, label: string, value: number, kind: "plain" | "paid" | "due") => {
+    ws.mergeCells(`${from}9:${to}9`);
+    ws.mergeCells(`${from}10:${to}10`);
+    const l = ws.getCell(`${from}9`);
+    const v = ws.getCell(`${from}10`);
+    l.value = label;
+    l.font = font({ size: 9, bold: true, color: kind === "due" ? (value > 0 ? RED : GREEN) : MUTED });
+    l.alignment = { vertical: "bottom", indent: 1 };
+    if (kind === "due" && value <= 0) {
+      v.value = "Nil — fully paid";
+      v.font = font({ size: 15, bold: true, color: GREEN });
+    } else {
+      money(v, value, { size: 15, bold: true, color: kind === "due" ? RED : kind === "paid" ? GREEN : INK });
+    }
+    v.alignment = { horizontal: "left", vertical: "middle", indent: 1 };
+    const bg = kind === "due" ? (value > 0 ? RED_BG : GREEN_BG) : HEAD_BG;
+    const edge = kind === "due" ? (value > 0 ? RED : GREEN) : LINE;
+    for (const r of [9, 10]) {
+      const c = ws.getCell(`${from}${r}`);
+      c.fill = fill(bg);
+      c.border = {
+        top: r === 9 ? { style: "thin", color: { argb: edge } } : undefined,
+        bottom: r === 10 ? { style: "thin", color: { argb: edge } } : undefined,
+        left: { style: "thin", color: { argb: edge } },
+        right: { style: "thin", color: { argb: edge } },
+      };
+    }
+  };
+  box("A", "C", "TOTAL BILLED", billed, "plain");
+  box("D", "E", "TOTAL PAID", paid, "paid");
+  box("F", "H", "BALANCE DUE", net, "due");
+  ws.getRow(9).height = 18;
+  ws.getRow(10).height = 30;
 
-  const head = 13;
-  tableHead(ws, head, ["Bill no.", "Bill date", "Site", "Work / payment", "Bill amount", "Paid", "Balance due"], 4);
+  // ----- Table -----
+  const head = 12;
+  const labels = ["#", "Bill no.", "Date", "Site", "Details", "Bill amount", "Paid", "Balance"];
+  const hr = ws.getRow(head);
+  labels.forEach((label, i) => {
+    const c = hr.getCell(i + 1);
+    c.value = label;
+    c.font = font({ size: 10, bold: true, color: "FFFFFFFF" });
+    c.fill = fill(i === 7 ? RED : HEAD_DARK);
+    c.border = GRID;
+    c.alignment = { vertical: "middle", horizontal: i >= 5 ? "right" : i === 0 ? "center" : "left" };
+  });
+  hr.height = 24;
+
+  const grid = (rowNo: number) => {
+    for (let c = 1; c <= 8; c++) ws.getRow(rowNo).getCell(c).border = GRID;
+  };
 
   let row = head + 1;
-  for (const bill of bills) {
+  bills.forEach((bill, idx) => {
+    // Bill line: what was billed. Balance starts at the bill amount.
     const r = ws.getRow(row);
-    r.getCell(1).value = bill.docNumber;
-    r.getCell(1).font = font({ bold: true });
-    r.getCell(2).value = formatDay(bill.date);
-    r.getCell(3).value = bill.site;
-    r.getCell(4).value = bill.subject || "—";
-    for (const c of [1, 2, 3, 4]) {
-      r.getCell(c).alignment = { vertical: "top", wrapText: true };
-      if (c > 1) r.getCell(c).font = font({ color: c === 4 ? INK : MUTED });
-    }
-    money(r.getCell(5), bill.total, { bold: true });
-    money(r.getCell(6), bill.received, { color: bill.received > 0 ? GREEN : MUTED });
-    if (bill.pending > 0) money(r.getCell(7), bill.pending, { bold: true });
-    else {
-      r.getCell(7).value = "Paid";
-      r.getCell(7).font = font({ bold: true, color: GREEN });
-      r.getCell(7).alignment = { horizontal: "right", vertical: "top" };
-    }
+    const hasPayments = bill.events.length > 0;
+    r.getCell(1).value = idx + 1;
+    r.getCell(1).alignment = { horizontal: "center", vertical: "top" };
+    r.getCell(1).font = font({ color: MUTED });
+    r.getCell(2).value = bill.docNumber;
+    r.getCell(2).font = font({ bold: true });
+    r.getCell(3).value = formatDay(bill.date);
+    r.getCell(4).value = bill.site || "—";
+    r.getCell(5).value = bill.subject ? `Bill: ${bill.subject}` : "Bill";
+    for (const c of [2, 3, 4, 5]) r.getCell(c).alignment = { vertical: "top", wrapText: true };
+    r.getCell(3).font = font({ color: MUTED });
+    r.getCell(4).font = font({ color: MUTED });
+    r.getCell(5).font = font({ bold: true });
+    money(r.getCell(6), bill.total, { bold: true });
+    balanceCell(r.getCell(8), bill.total, !hasPayments);
     r.height = heightFor([
-      [bill.site, 30],
-      [bill.subject, 36],
+      [bill.site, 28],
+      [`Bill: ${bill.subject}`, 34],
     ]);
+    grid(row);
     row++;
 
-    // What the client has paid for this bill, and when.
-    if (bill.events.length === 0) {
+    // Each payment, with what is left after it.
+    let left = bill.total;
+    bill.events.forEach((e, i) => {
+      const { title, detail } = eventWords(e, input.paymentTotals);
+      left = Math.round((left - e.amount) * 100) / 100;
+      const last = i === bill.events.length - 1;
       const pr = ws.getRow(row);
-      for (let c = 1; c <= 7; c++) pr.getCell(c).fill = fill(SOFT_BG);
-      pr.getCell(2).value = "   No payment received yet";
-      pr.getCell(2).font = font({ size: 10, italic: true, color: MUTED });
+      pr.getCell(3).value = formatDay(e.date);
+      pr.getCell(3).font = font({ size: 10, color: MUTED });
+      pr.getCell(3).alignment = { vertical: "top" };
+      const text = [title, detail].filter(Boolean).join(" · ");
+      ws.mergeCells(`D${row}:E${row}`);
+      pr.getCell(4).value = `↳ ${text}${e.kind === "writeoff" ? ` (${inr(e.amount)})` : ""}`;
+      pr.getCell(4).font = font({ size: 10, color: e.kind === "writeoff" ? MUTED : INK, italic: e.kind === "writeoff" });
+      pr.getCell(4).alignment = { vertical: "top", wrapText: true, indent: 1 };
+      if (e.kind !== "writeoff") money(pr.getCell(7), e.amount, { size: 10, color: GREEN });
+      balanceCell(pr.getCell(8), left, last);
+      pr.height = heightFor([[text, 62]]);
+      grid(row);
       row++;
-    } else {
-      for (const e of bill.events) {
-        const { title, detail } = eventWords(e, input.paymentTotals);
-        const pr = ws.getRow(row);
-        for (let c = 1; c <= 7; c++) pr.getCell(c).fill = fill(SOFT_BG);
-        ws.mergeCells(`B${row}:C${row}`);
-        pr.getCell(2).value = `   ↳ ${title}`;
-        pr.getCell(2).font = font({ size: 10, color: e.kind === "writeoff" ? MUTED : INK });
-        pr.getCell(2).alignment = { vertical: "top" };
-        const text = [formatDay(e.date), detail].filter(Boolean).join(" · ");
-        pr.getCell(4).value = text;
-        pr.getCell(4).font = font({ size: 10, color: MUTED });
-        pr.getCell(4).alignment = { wrapText: true, vertical: "top" };
-        // A waived amount was not paid, so it stays out of the Paid column.
-        if (e.kind !== "writeoff") money(pr.getCell(6), e.amount, { size: 10, color: GREEN });
-        pr.height = heightFor([[text, 36]]);
-        row++;
-      }
+    });
+    if (!hasPayments) {
+      // nothing paid yet: say so plainly, under the bill
+      const pr = ws.getRow(row);
+      ws.mergeCells(`D${row}:E${row}`);
+      pr.getCell(4).value = "↳ No payment received yet";
+      pr.getCell(4).font = font({ size: 10, italic: true, color: MUTED });
+      pr.getCell(4).alignment = { indent: 1 };
+      grid(row);
+      row++;
     }
-    for (let c = 1; c <= 7; c++) ws.getRow(row - 1).getCell(c).border = bottom();
-  }
+    // A slightly stronger line between bills
+    for (let c = 1; c <= 8; c++) {
+      const cell = ws.getRow(row - 1).getCell(c);
+      cell.border = { ...cell.border, bottom: { style: "thin", color: { argb: "FF71717A" } } };
+    }
+  });
 
   // Totals
   const t = ws.getRow(row);
+  ws.mergeCells(`A${row}:E${row}`);
   t.getCell(1).value = "Total";
   t.getCell(1).font = font({ bold: true });
-  money(t.getCell(5), billed, { bold: true });
-  money(t.getCell(6), paid, { bold: true, color: GREEN });
-  if (due > 0) money(t.getCell(7), due, { bold: true });
-  else {
-    t.getCell(7).value = "Nil";
-    t.getCell(7).font = font({ bold: true, color: GREEN });
-    t.getCell(7).alignment = { horizontal: "right", vertical: "top" };
+  t.getCell(1).alignment = { horizontal: "right", vertical: "middle" };
+  money(t.getCell(6), billed, { bold: true });
+  money(t.getCell(7), paid, { bold: true, color: GREEN });
+  balanceCell(t.getCell(8), due, true);
+  for (let c = 1; c <= 8; c++) {
+    const cell = t.getCell(c);
+    cell.border = { top: { style: "thin", color: { argb: INK } }, bottom: { style: "double", color: { argb: INK } } };
+    if (c < 8) cell.fill = fill(HEAD_BG);
+    cell.alignment = { ...cell.alignment, vertical: "middle" };
   }
-  for (let c = 1; c <= 7; c++)
-    t.getCell(c).border = { top: { style: "thin", color: { argb: INK } }, bottom: { style: "double", color: { argb: INK } } };
   t.height = 24;
-  row += 1;
+  row++;
 
-  if (input.advanceWithUs > 0 && due <= 0) {
-    // Nothing due: just say how much advance is with us.
-    const n = ws.getRow(row);
-    ws.mergeCells(`A${row}:F${row}`);
-    n.getCell(1).value = "Advance remaining with us (adjusted in your next bill)";
-    n.getCell(1).font = font({ bold: true });
-    money(n.getCell(7), input.advanceWithUs, { bold: true, color: GREEN });
-    row++;
-  } else if (input.advanceWithUs > 0) {
+  if (input.advanceWithUs > 0) {
     const a = ws.getRow(row);
-    ws.mergeCells(`A${row}:F${row}`);
-    a.getCell(1).value = "Less: advance already paid, not yet adjusted against any bill";
+    ws.mergeCells(`A${row}:G${row}`);
+    a.getCell(1).value =
+      due > 0
+        ? "Less: advance already paid, not yet used for any bill"
+        : "Advance with us (will be adjusted in your next bill)";
     a.getCell(1).font = font({ size: 10, color: MUTED });
-    money(a.getCell(7), input.advanceWithUs, { size: 10, color: GREEN });
-    a.getCell(7).numFmt = `"− "${INR.split(";")[2]}`;
+    a.getCell(1).alignment = { horizontal: "right" };
+    money(a.getCell(8), input.advanceWithUs, { size: 10, color: GREEN });
     row++;
-    const n = ws.getRow(row);
-    ws.mergeCells(`A${row}:F${row}`);
-    n.getCell(1).value = net > 0 ? "Balance due" : "Advance remaining with us (adjusted in your next bill)";
-    n.getCell(1).font = font({ bold: true });
-    money(n.getCell(7), net > 0 ? net : input.advanceWithUs - due, { bold: true, color: net > 0 ? INK : GREEN });
-    row++;
+    if (due > 0) {
+      const n = ws.getRow(row);
+      ws.mergeCells(`A${row}:G${row}`);
+      n.getCell(1).value = "Balance due";
+      n.getCell(1).font = font({ bold: true });
+      n.getCell(1).alignment = { horizontal: "right" };
+      balanceCell(n.getCell(8), net, true);
+      row++;
+    }
   }
 
-  // How to pay
+  // ----- Banking details (left) and signature (right) -----
   row += 1;
-  if (net > 0 && b.bank && (b.bank.accountNumber || b.bank.bankName)) {
-    line(ws, row++, "A", "D", "Banking details", { size: 10, bold: true });
-    const bankLines = [
-      b.bank.accountName && `Account name: ${b.bank.accountName}`,
-      b.bank.bankName && `Bank: ${b.bank.bankName}${b.bank.branch ? `, ${b.bank.branch}` : ""}`,
-      b.bank.accountNumber && `Account no.: ${b.bank.accountNumber}`,
-      b.bank.ifsc && `IFSC: ${b.bank.ifsc}`,
-    ].filter(Boolean) as string[];
-    for (const l of bankLines) line(ws, row++, "A", "D", l, { size: 10 });
-    row += 1;
+  const blockStart = row;
+  if (b.bank && (b.bank.accountNumber || b.bank.bankName)) {
+    const lines = [
+      ["Account name", b.bank.accountName],
+      ["Bank", [b.bank.bankName, b.bank.branch].filter(Boolean).join(", ")],
+      ["Account no.", b.bank.accountNumber],
+      ["IFSC", b.bank.ifsc],
+    ].filter(([, v]) => v) as [string, string][];
+    line(ws, row, "A", "E", "Banking details", { size: 10, bold: true }).fill = fill(HEAD_BG);
+    row++;
+    for (const [k, v] of lines) {
+      ws.mergeCells(`A${row}:B${row}`);
+      ws.getCell(`A${row}`).value = k;
+      ws.getCell(`A${row}`).font = font({ size: 10, color: MUTED });
+      line(ws, row, "C", "E", v, { size: 10, bold: k === "Account no." || k === "IFSC" });
+      row++;
+    }
+    for (let r = blockStart; r < row; r++)
+      for (const col of ["A", "B", "C", "D", "E"]) {
+        const cell = ws.getCell(`${col}${r}`);
+        cell.border = {
+          top: r === blockStart ? { style: "thin", color: { argb: LINE } } : undefined,
+          bottom: r === row - 1 ? { style: "thin", color: { argb: LINE } } : undefined,
+          left: col === "A" ? { style: "thin", color: { argb: LINE } } : undefined,
+          right: col === "E" ? { style: "thin", color: { argb: LINE } } : undefined,
+        };
+      }
   }
-  const notes = [b.phone ? `For any questions about this statement, please call ${b.phone}.` : ""].filter(Boolean);
-  for (const n of notes) line(ws, row++, "A", "G", n, { size: 9, italic: true, color: MUTED });
-  row += 1;
-  if (b.name) line(ws, row, "D", "G", `For ${b.name}`, { size: 10, bold: true }).alignment = { horizontal: "right", wrapText: true };
-  if (b.signatory) line(ws, row + 3, "D", "G", b.signatory, { size: 10, color: MUTED }).alignment = { horizontal: "right" };
+  if (b.name) {
+    line(ws, blockStart, "F", "H", `For ${b.name}`, { size: 10, bold: true }).alignment = { horizontal: "right", wrapText: true, vertical: "top" };
+    ws.getRow(blockStart).height = Math.max(ws.getRow(blockStart).height ?? 15, b.name.length > 34 ? 30 : 18);
+  }
+  const signRow = Math.max(row - 1, blockStart + 4);
+  if (b.signatory) line(ws, signRow, "F", "H", b.signatory, { size: 10, bold: true }).alignment = { horizontal: "right" };
+  line(ws, signRow + 1, "F", "H", "Authorised signatory", { size: 9, color: MUTED }).alignment = { horizontal: "right" };
+  row = signRow + 3;
+
+  const notes = [
+    "Balance = what is still to be paid after each line.",
+    b.phone ? `For any questions about this statement, please call ${b.phone}.` : "",
+  ].filter(Boolean);
+  for (const n of notes) line(ws, row++, "A", "H", n, { size: 9, italic: true, color: MUTED });
 
   pageSetup(ws, head);
 }
@@ -329,17 +417,30 @@ function runningBalanceSheet(ws: Worksheet, input: ExportInput) {
   line(ws, 7, "A", "E", input.client.name, { size: 14, bold: true }, 22);
   line(ws, 8, "A", "E", "Every bill and payment in date order, with the balance after each line.", { size: 10, color: MUTED });
   const head = 10;
-  tableHead(ws, head, ["Date", "Details", "Billed", "Paid", "Balance"], 2);
+  ["Date", "Details", "Billed", "Paid", "Balance"].forEach((label, i) => {
+    const c = ws.getRow(head).getCell(i + 1);
+    c.value = label;
+    c.font = font({ size: 10, bold: true, color: "FFFFFFFF" });
+    c.fill = fill(i === 4 ? RED : HEAD_DARK);
+    c.border = GRID;
+    c.alignment = { vertical: "middle", horizontal: i >= 2 ? "right" : "left" };
+  });
+  ws.getRow(head).height = 24;
 
   const balance = (cell: Cell, value: number, bold = false) => {
-    money(cell, Math.abs(value), { bold, color: value < 0 ? GREEN : INK });
-    if (value < 0) cell.numFmt = `"Advance "${INR.split(";")[2]}`;
+    if (value < 0) {
+      money(cell, -value, { bold, color: GREEN });
+      cell.numFmt = `"Advance "${INR.split(";")[2]}`;
+      cell.fill = fill(GREEN_BG);
+      return;
+    }
+    balanceCell(cell, value, bold);
   };
   // Client wording; entries removed as mistakes are left out.
   const words = (e: LedgerEntry) => {
     if (e.kind === "bill") return [e.title, e.detail].filter(Boolean).join(" — ");
     if (e.kind === "marked") return `Paid — ${e.title.replace("Marked paid · ", "")}`;
-    if (e.kind === "tds") return "TDS deducted by you";
+    if (e.kind === "tds") return "Payment";
     if (e.kind === "adjustment") return `Balance waived${e.detail ? ` — ${e.detail.replace("Client will not pay the rest", "").replace(/^ · /, "")}` : ""}`;
     return [e.title.replace("Received ·", "Payment ·"), e.detail.replace("general payment", "").replace(/ · $/, "")]
       .filter(Boolean)
@@ -352,7 +453,7 @@ function runningBalanceSheet(ws: Worksheet, input: ExportInput) {
     r.getCell(2).value = label;
     r.getCell(2).font = font({ bold: true });
     balance(r.getCell(5), value, true);
-    for (let c = 1; c <= 5; c++) r.getCell(c).fill = fill(HEAD_BG);
+    for (let c = 1; c <= 4; c++) r.getCell(c).fill = fill(HEAD_BG);
     r.height = 22;
     row++;
   };
@@ -370,7 +471,7 @@ function runningBalanceSheet(ws: Worksheet, input: ExportInput) {
     else money(r.getCell(4), -e.amount, { color: GREEN });
     balance(r.getCell(5), e.balance);
     r.height = heightFor([[text, 50]]);
-    for (let c = 1; c <= 5; c++) r.getCell(c).border = bottom();
+    for (let c = 1; c <= 5; c++) r.getCell(c).border = GRID;
     row++;
   }
   edge(st.closing < 0 ? "Advance with us (adjusted in your next bill)" : "Balance due", st.closing);

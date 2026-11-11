@@ -1,5 +1,6 @@
 import type { Document } from "@/lib/types/database";
 
+import { SHOW_TDS } from "./flags";
 import type { Payment, PaymentMode } from "./types";
 
 /** Invoice fields the ledger needs. */
@@ -363,19 +364,21 @@ export function companyEntries(
       });
       continue;
     }
-    if (Number(pay.amount) > 0) {
+    // With TDS hidden, a payment shows as one amount (cash + TDS together).
+    const shown = SHOW_TDS ? Number(pay.amount) : Number(pay.amount) + Number(pay.tds);
+    if (shown > 0) {
       raw.push({
         key: `p-${pay.id}`,
         date: pay.paid_on,
         kind: "payment",
         title: `Received · ${MODE_LABELS[pay.mode ?? "other"]}`,
         detail: extras,
-        amount: -Number(pay.amount),
+        amount: -shown,
         voided: !!pay.voided_at,
         paymentId: pay.id,
       });
     }
-    if (Number(pay.tds) > 0) {
+    if (SHOW_TDS && Number(pay.tds) > 0) {
       raw.push({
         key: `t-${pay.id}`,
         date: pay.paid_on,

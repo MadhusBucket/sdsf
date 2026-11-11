@@ -17,6 +17,7 @@ import {
   type LedgerInvoice,
 } from "@/lib/ledger/compute";
 import type { Business, ExportBill } from "@/lib/ledger/exportExcel";
+import { SHOW_TDS } from "@/lib/ledger/flags";
 import type { Payment } from "@/lib/ledger/types";
 import { cn } from "@/lib/utils";
 
@@ -87,7 +88,7 @@ function howPaid(e: BillEvent) {
   return [
     e.mode ? MODE_LABELS[e.mode] : "",
     e.reference ?? "",
-    e.tds > 0 ? `incl. TDS ${rupees(e.tds)}` : "",
+    SHOW_TDS && e.tds > 0 ? `incl. TDS ${rupees(e.tds)}` : "",
     e.kind === "general" ? "from a general payment" : "",
   ]
     .filter(Boolean)

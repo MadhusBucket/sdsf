@@ -6,6 +6,7 @@ import { CheckCircle2, IndianRupee } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { formatDay, MODE_LABELS, rupees } from "@/lib/ledger/compute";
+import { SHOW_TDS } from "@/lib/ledger/flags";
 import type { Payment } from "@/lib/ledger/types";
 import { cn } from "@/lib/utils";
 
@@ -121,7 +122,7 @@ function PaymentRow({ payment: p, onRemove }: { payment: Payment; onRemove: () =
           {voided && <span className="ml-1">(removed)</span>}
         </p>
         <p className="text-sm text-zinc-500">{[formatDay(p.paid_on), p.reference, p.note].filter(Boolean).join(" · ")}</p>
-        {Number(p.tds) > 0 && (
+        {SHOW_TDS && Number(p.tds) > 0 && (
           <p className="text-sm">
             + TDS kept by client: <b className="tabular-nums">{rupees(Number(p.tds))}</b>
           </p>
@@ -134,7 +135,7 @@ function PaymentRow({ payment: p, onRemove }: { payment: Payment; onRemove: () =
             voided ? "text-zinc-400 line-through" : isAdj ? "text-zinc-500" : "text-emerald-700 dark:text-emerald-400"
           )}
         >
-          {rupees(Number(p.amount))}
+          {rupees(Number(p.amount) + (SHOW_TDS || isAdj ? 0 : Number(p.tds)))}
         </p>
         {!voided && (
           <button type="button" onClick={onRemove} className="min-h-9 text-sm text-zinc-500 underline underline-offset-4">

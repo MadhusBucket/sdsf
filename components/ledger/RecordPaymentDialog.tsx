@@ -12,6 +12,7 @@ import { useSubmitLock } from "@/lib/hooks/useSubmitLock";
 import { formatDay, MODE_LABELS, rupees, todayISO, type LedgerResult } from "@/lib/ledger/compute";
 import type { LedgerData } from "@/lib/ledger/data";
 import { asLedgerClient, type PaymentInsert, type PaymentMode } from "@/lib/ledger/types";
+import { SHOW_TDS } from "@/lib/ledger/flags";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -474,7 +475,7 @@ function PaymentForm({
         </div>
       </div>
 
-      {showTds ? (
+      {!SHOW_TDS ? null : showTds ? (
         <div className="grid gap-2">
           <label htmlFor="pay-tds" className="font-medium">
             TDS kept by client
