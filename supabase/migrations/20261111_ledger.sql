@@ -1,6 +1,8 @@
 -- Ledger: money received against invoices (or "general" for a company).
 -- Adds TWO new, empty tables (payments, quotation_invoices). Does not change or copy any existing
 -- invoice, quotation, company or profile. Safe to run more than once.
+-- All or nothing: if any line fails, nothing is changed.
+begin;
 
 create table if not exists public.payments (
   id          uuid primary key default gen_random_uuid(),
@@ -62,3 +64,5 @@ create policy quotation_invoices_via_documents on public.quotation_invoices
   );
 
 grant select, insert on public.quotation_invoices to authenticated;
+
+commit;

@@ -16,7 +16,7 @@ import {
   type LedgerEntry,
   type LedgerInvoice,
 } from "@/lib/ledger/compute";
-import type { ExportBill } from "@/lib/ledger/exportExcel";
+import type { Business, ExportBill } from "@/lib/ledger/exportExcel";
 import type { Payment } from "@/lib/ledger/types";
 import { cn } from "@/lib/utils";
 
@@ -40,7 +40,10 @@ interface Props {
   paymentsReady: boolean;
   companyName: string;
   companyDetail: string;
-  business: { name: string; address: string; gstin: string; phone: string };
+  clientGstin: string;
+  /** Money the company paid that no bill has used yet. */
+  advanceWithUs: number;
+  business: Business;
   statement: { opening: number; rows: LedgerEntry[]; closing: number };
   onRecord: (invoiceId: string) => void;
   onRemove: (payment: Payment) => void;
@@ -249,12 +252,14 @@ export function BillsSection(props: Props) {
     setBusy(true);
     try {
       const { downloadLedgerExcel } = await import("@/lib/ledger/exportExcel");
+      const everything = chosen.length === rows.length;
       await downloadLedgerExcel({
         business: props.business,
-        company: { name: props.companyName, detail: props.companyDetail },
+        client: { name: props.companyName, gstin: props.clientGstin },
         bills: chosen.map((r) => ({
           docNumber: r.inv.doc_number,
-          branch: [r.branch, r.address].filter(Boolean).join("\n"),
+          // The client knows the site by its landmark; the full address when there is none.
+          site: r.branch || r.address,
           date: r.inv.date,
           subject: r.inv.subject ?? "",
           total: r.bal.total,
@@ -265,8 +270,10 @@ export function BillsSection(props: Props) {
           closedOn: r.bal.closedOn,
           events: r.bal.events,
         })),
-        // The full statement only makes sense when every bill is in the file.
-        statement: chosen.length === rows.length ? props.statement : null,
+        paymentTotals: Object.fromEntries(payments.map((p) => [p.id, Number(p.amount) + Number(p.tds)])),
+        // Advance and the running balance only make sense when every bill is in the file.
+        advanceWithUs: everything ? props.advanceWithUs : 0,
+        statement: everything ? props.statement : null,
       });
       toast.success(`Excel file with ${chosen.length} ${chosen.length === 1 ? "bill" : "bills"} downloaded`);
       setExporting(false);
@@ -415,12 +422,22 @@ export function BillsSection(props: Props) {
             <tbody>
               {shown.map((r) => {
                 const isOpen = open.has(r.inv.id);
-                const cell = cn("border-t border-black/[0.06] py-4 align-top dark:border-white/10", isOpen && "bg-white dark:bg-card");
+                // While a bill is open, the others fade to grey so the open one stands out.
+                const dimmed = open.size > 0 && !isOpen;
+                const cell = cn(
+                  "border-t border-black/[0.06] py-4 align-top transition-[background-color,opacity] dark:border-white/10",
+                  isOpen && "bg-white dark:bg-card",
+                  dimmed && "bg-zinc-50 opacity-50 dark:bg-white/5"
+                );
                 return (
                   <Fragment key={r.inv.id}>
                     <tr
                       onClick={() => (exporting ? toggle(setSelected, r.inv.id) : toggle(setOpen, r.inv.id))}
-                      className={cn("cursor-pointer transition-colors", !isOpen && "hover:bg-zinc-50 dark:hover:bg-white/5")}
+                      className={cn(
+                        "cursor-pointer transition-colors",
+                        !isOpen && !dimmed && "hover:bg-zinc-50 dark:hover:bg-white/5",
+                        dimmed && "[&>td]:hover:opacity-80"
+                      )}
                     >
                       {exporting && (
                         <td className={cell}>
@@ -468,21 +485,13 @@ export function BillsSection(props: Props) {
                     {isOpen && (
                       <tr>
                         <td colSpan={exporting ? 10 : 9} className="pb-5">
-                          <div className="grid gap-6 rounded-2xl bg-white p-5 shadow-[0_10px_30px_-12px_rgba(16,24,40,0.18)] ring-1 ring-black/[0.06] md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] dark:bg-card dark:ring-white/10">
-                            <div className="min-w-0">
-                              <p className="mb-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50">Payments</p>
-                              <PaymentList row={r} payments={payments} onRemove={onRemove} />
-                            </div>
-                            <div className="min-w-0 space-y-4 md:border-l md:border-black/[0.06] md:pl-6 dark:md:border-white/10">
-                              <div>
-                                <p className="mb-1 text-sm font-semibold text-zinc-900 dark:text-zinc-50">Work</p>
-                                <p className="text-sm text-zinc-600 break-words dark:text-zinc-300">{r.inv.subject || "—"}</p>
-                              </div>
-                              <div>
-                                <p className="mb-1 text-sm font-semibold text-zinc-900 dark:text-zinc-50">Branch &amp; address</p>
-                                <Place row={r} className="text-sm" />
-                              </div>
+                          <div className="rounded-2xl bg-white p-5 shadow-[0_10px_30px_-12px_rgba(16,24,40,0.18)] ring-1 ring-black/[0.06] dark:bg-card dark:ring-white/10">
+                            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Payments for {r.inv.doc_number}</p>
                               <Actions row={r} paymentsReady={paymentsReady} onRecord={onRecord} />
+                            </div>
+                            <div className="max-w-3xl">
+                              <PaymentList row={r} payments={payments} onRemove={onRemove} />
                             </div>
                           </div>
                         </td>

@@ -17,6 +17,7 @@ import {
   todayISO,
   type Period,
 } from "@/lib/ledger/compute";
+import type { Business } from "@/lib/ledger/exportExcel";
 import type { Payment } from "@/lib/ledger/types";
 import { cn } from "@/lib/utils";
 
@@ -34,7 +35,7 @@ export function CompanyLedgerClient({
   business,
 }: {
   companyId: string;
-  business: { name: string; address: string; gstin: string; phone: string };
+  business: Business;
 }) {
   const { data, ledger, failed, reload } = useLedger();
   const [period, setPeriod] = useState<Period>("fy");
@@ -159,6 +160,8 @@ export function CompanyLedgerClient({
         paymentsReady={data.paymentsReady}
         companyName={name}
         companyDetail={companyDetail}
+        clientGstin={many ? [...new Set(branches.map((x) => x.gstin).filter(Boolean))].join(", ") : anchor.gstin ?? ""}
+        advanceWithUs={s.extra}
         business={business}
         statement={fullStatement}
         onRecord={(invoiceId) => setStart({ groupKey: key, invoiceId })}
