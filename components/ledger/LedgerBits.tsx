@@ -39,7 +39,7 @@ export function MoneyCards({
             className={cn(
               "font-heading whitespace-nowrap text-2xl font-bold tabular-nums sm:mt-1",
               it.tone === "good" && "text-emerald-700 dark:text-emerald-400",
-              it.tone === "bad" && "text-red-700 dark:text-red-400"
+              it.tone === "bad" && "text-amber-700 dark:text-amber-400"
             )}
           >
             {rupees(it.value)}
@@ -53,7 +53,7 @@ export function MoneyCards({
 export function ProgressBar({ total, done }: { total: number; done: number }) {
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 100;
   return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-red-100 dark:bg-red-950" aria-hidden>
+    <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-white/10" aria-hidden>
       <div className="h-full rounded-full bg-emerald-600" style={{ width: `${pct}%` }} />
     </div>
   );

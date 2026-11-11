@@ -237,7 +237,7 @@ function PickBill({
               </span>
               <span className="shrink-0 text-right">
                 <span className="block text-xs text-zinc-500">Pending</span>
-                <span className="block font-bold tabular-nums text-red-700 dark:text-red-400">{rupees(bal.pending)}</span>
+                <span className="block font-bold tabular-nums text-zinc-900 dark:text-zinc-50">{rupees(bal.pending)}</span>
               </span>
             </button>
           </li>

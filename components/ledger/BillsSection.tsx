@@ -2,7 +2,7 @@
 
 import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, Download, FileSpreadsheet, IndianRupee, LayoutGrid, Rows3, X } from "lucide-react";
+import { ChevronRight, Download, ExternalLink, FileSpreadsheet, IndianRupee, LayoutList, Rows3, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,10 @@ type Status = ExportBill["status"];
 export interface BillRow {
   inv: LedgerInvoice;
   bal: InvoiceBalance;
+  /** Landmark / branch name, may be empty. */
   branch: string;
+  /** Full address of that branch, may be several lines. */
+  address: string;
   status: Status;
 }
 
@@ -51,31 +54,31 @@ export function billStatus(bal: InvoiceBalance): Status {
   return "Not paid";
 }
 
-const STATUS_STYLE: Record<Status, { dot: string; pill: string }> = {
-  Paid: { dot: "bg-emerald-500", pill: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
-  "Part paid": { dot: "bg-amber-500", pill: "bg-amber-50 text-amber-800 ring-amber-200" },
-  "Not paid": { dot: "bg-red-500", pill: "bg-red-50 text-red-700 ring-red-200" },
+/* Soft colours, like tags: only the status and money received are coloured. */
+const STATUS_STYLE: Record<Status, string> = {
+  Paid: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
+  "Part paid": "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+  "Not paid": "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
 };
 
-function StatusPill({ status }: { status: Status }) {
+function StatusTag({ status }: { status: Status }) {
   return (
-    <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap ring-1", STATUS_STYLE[status].pill)}>
-      <span className={cn("size-1.5 rounded-full", STATUS_STYLE[status].dot)} />
+    <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap", STATUS_STYLE[status])}>
       {status}
     </span>
   );
 }
 
-const EVENT_STYLE: Record<string, string> = {
-  Advance: "text-sky-700 bg-sky-50",
-  "Part payment": "text-amber-800 bg-amber-50",
-  "Final payment": "text-emerald-700 bg-emerald-50",
-  "Full payment": "text-emerald-700 bg-emerald-50",
-  "Written off (bill closed)": "text-zinc-600 bg-zinc-100",
-  "Marked paid": "text-zinc-600 bg-zinc-100",
+const LABEL_COLOR: Record<string, string> = {
+  Advance: "text-sky-700 dark:text-sky-400",
+  "Part payment": "text-amber-700 dark:text-amber-400",
+  "Final payment": "text-emerald-700 dark:text-emerald-400",
+  "Full payment": "text-emerald-700 dark:text-emerald-400",
+  "Written off (bill closed)": "text-zinc-500",
+  "Marked paid": "text-zinc-500",
 };
 
-function eventDetail(e: BillEvent) {
+function howPaid(e: BillEvent) {
   if (e.kind === "writeoff") return "Client will not pay the rest";
   if (e.kind === "marked") return "Payment details not entered";
   return [
@@ -88,73 +91,69 @@ function eventDetail(e: BillEvent) {
     .join(" · ");
 }
 
-/** The bill's story as a small timeline: bill made, then each payment with its date. */
-function Timeline({
-  row,
-  payments,
-  onRemove,
-}: {
-  row: BillRow;
-  payments: Payment[];
-  onRemove: (p: Payment) => void;
-}) {
-  const byId = new Map(payments.map((p) => [p.id, p]));
+/** Where the work was: landmark in dark, full address under it. Never cut off. */
+function Place({ row, className }: { row: BillRow; className?: string }) {
+  if (!row.branch && !row.address) return <span className="text-zinc-400">—</span>;
   return (
-    <ol className="relative space-y-3 border-l-2 border-dashed border-black/10 pl-5 dark:border-white/15">
-      <li className="relative">
-        <span className="absolute top-1.5 -left-[27px] size-3 rounded-full border-2 border-white bg-zinc-400 dark:border-card" />
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
-          <p className="text-sm">
-            <span className="font-semibold">Bill made</span>
-            <span className="text-zinc-500"> · {formatDay(row.inv.date)}</span>
-          </p>
-          <p className="text-sm font-semibold tabular-nums">{rupees(row.bal.total)}</p>
-        </div>
-      </li>
+    <div className={cn("min-w-0 leading-snug break-words", className)}>
+      {row.branch && <p className="font-medium text-zinc-800 dark:text-zinc-200">{row.branch}</p>}
+      {row.address && <p className="text-zinc-500 whitespace-pre-line">{row.address}</p>}
+    </div>
+  );
+}
+
+/**
+ * The bill's story as a tidy list with a guide line:
+ * Bill made, then each payment (label, date, how, amount), then what is still to collect.
+ */
+function PaymentList({ row, payments, onRemove }: { row: BillRow; payments: Payment[]; onRemove: (p: Payment) => void }) {
+  const byId = new Map(payments.map((p) => [p.id, p]));
+  const line = "relative pl-6 before:absolute before:top-1/2 before:left-0 before:h-px before:w-4 before:bg-black/15 dark:before:bg-white/20";
+  const cols = "grid grid-cols-[minmax(7.5rem,auto)_1fr_auto] items-baseline gap-x-4 gap-y-0.5 py-2";
+  return (
+    <div className="border-l border-black/15 dark:border-white/20">
+      <div className={cn(line, cols)}>
+        <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Bill made</span>
+        <span className="text-sm text-zinc-500">{formatDay(row.inv.date)}</span>
+        <span className="text-right text-sm font-semibold tabular-nums">{rupees(row.bal.total)}</span>
+      </div>
       {row.bal.events.map((e) => {
         const pay = e.paymentId ? byId.get(e.paymentId) : undefined;
         const removable = pay && !pay.voided_at && (e.kind === "payment" || e.kind === "writeoff");
         return (
-          <li key={e.key} className="relative">
-            <span
-              className={cn(
-                "absolute top-1.5 -left-[27px] size-3 rounded-full border-2 border-white dark:border-card",
-                e.kind === "writeoff" || e.kind === "marked" ? "bg-zinc-400" : "bg-emerald-500"
+          <div key={e.key} className={cn(line, cols)}>
+            <span className={cn("text-sm font-semibold", LABEL_COLOR[e.label] ?? "text-zinc-600")}>{e.label}</span>
+            <span className="text-sm text-zinc-500">
+              {formatDay(e.date)}
+              {howPaid(e) && <span className="block text-zinc-400">{howPaid(e)}</span>}
+              {removable && (
+                <button
+                  type="button"
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    onRemove(pay);
+                  }}
+                  className="mt-0.5 block min-h-7 text-xs text-zinc-400 underline underline-offset-4 hover:text-zinc-700"
+                >
+                  {e.kind === "writeoff" ? "Undo" : "Wrong? Remove"}
+                </button>
               )}
-            />
-            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
-              <p className="text-sm">
-                <span className={cn("rounded-md px-1.5 py-0.5 text-xs font-semibold", EVENT_STYLE[e.label] ?? "bg-zinc-100")}>{e.label}</span>
-                <span className="text-zinc-500"> · {formatDay(e.date)}</span>
-                {eventDetail(e) && <span className="text-zinc-500"> · {eventDetail(e)}</span>}
-              </p>
-              <p className={cn("text-sm font-semibold tabular-nums", e.kind === "writeoff" ? "text-zinc-500" : "text-emerald-700 dark:text-emerald-400")}>
-                {e.kind === "writeoff" ? "" : "− "}
-                {rupees(e.amount)}
-              </p>
-            </div>
-            {removable && (
-              <button
-                type="button"
-                onClick={() => onRemove(pay)}
-                className="mt-0.5 min-h-8 text-xs text-zinc-500 underline underline-offset-4"
-              >
-                {e.kind === "writeoff" ? "Undo" : "Wrong? Remove"}
-              </button>
-            )}
-          </li>
+            </span>
+            <span className={cn("text-right text-sm font-semibold tabular-nums", e.kind === "writeoff" || e.kind === "marked" ? "text-zinc-500" : "text-emerald-700 dark:text-emerald-400")}>
+              {e.kind === "writeoff" ? "" : "− "}
+              {rupees(e.amount)}
+            </span>
+          </div>
         );
       })}
       {row.bal.pending > 0 && (
-        <li className="relative">
-          <span className="absolute top-1.5 -left-[27px] size-3 rounded-full border-2 border-white bg-red-500 dark:border-card" />
-          <div className="flex flex-wrap items-baseline justify-between gap-x-4">
-            <p className="text-sm font-semibold text-red-700 dark:text-red-400">Still to collect</p>
-            <p className="text-sm font-bold tabular-nums text-red-700 dark:text-red-400">{rupees(row.bal.pending)}</p>
-          </div>
-        </li>
+        <div className={cn(line, cols)}>
+          <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Still to collect</span>
+          <span />
+          <span className="text-right text-sm font-bold tabular-nums text-zinc-900 dark:text-zinc-50">{rupees(row.bal.pending)}</span>
+        </div>
       )}
-    </ol>
+    </div>
   );
 }
 
@@ -168,6 +167,32 @@ function Check({ checked, onChange, label }: { checked: boolean; onChange: () =>
       onClick={(e) => e.stopPropagation()}
       className="size-5 cursor-pointer rounded accent-[var(--primary)]"
     />
+  );
+}
+
+function Actions({ row, paymentsReady, onRecord }: { row: BillRow; paymentsReady: boolean; onRecord: (id: string) => void }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {row.bal.pending > 0 && paymentsReady && (
+        <Button
+          type="button"
+          className="h-10 rounded-xl"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRecord(row.inv.id);
+          }}
+        >
+          <IndianRupee className="size-4" />
+          Record payment
+        </Button>
+      )}
+      <Button asChild variant="outline" className="h-10 rounded-xl">
+        <Link href={`/document/${row.inv.id}`} onClick={(e) => e.stopPropagation()}>
+          <ExternalLink className="size-4" />
+          Open bill
+        </Link>
+      </Button>
+    </div>
   );
 }
 
@@ -209,26 +234,14 @@ export function BillsSection(props: Props) {
     [rows, prefs.filter]
   );
 
-  const toggleOpen = (id: string) =>
-    setOpen((s) => {
-      const n = new Set(s);
-      if (n.has(id)) n.delete(id);
-      else n.add(id);
-      return n;
-    });
-  const toggleSel = (id: string) =>
-    setSelected((s) => {
+  const toggle = (set: React.Dispatch<React.SetStateAction<Set<string>>>, id: string) =>
+    set((s) => {
       const n = new Set(s);
       if (n.has(id)) n.delete(id);
       else n.add(id);
       return n;
     });
   const allSelected = shown.length > 0 && shown.every((r) => selected.has(r.inv.id));
-
-  const startExport = () => {
-    setSelected(new Set(shown.map((r) => r.inv.id)));
-    setExporting(true);
-  };
 
   const download = async () => {
     const chosen = shown.filter((r) => selected.has(r.inv.id));
@@ -241,7 +254,7 @@ export function BillsSection(props: Props) {
         company: { name: props.companyName, detail: props.companyDetail },
         bills: chosen.map((r) => ({
           docNumber: r.inv.doc_number,
-          branch: r.branch,
+          branch: [r.branch, r.address].filter(Boolean).join("\n"),
           date: r.inv.date,
           subject: r.inv.subject ?? "",
           total: r.bal.total,
@@ -271,15 +284,27 @@ export function BillsSection(props: Props) {
     { value: "all", label: "All bills" },
   ];
 
+  const lastPayment = (r: BillRow) =>
+    r.bal.closedOn && r.bal.pending <= 0 ? (
+      <span>
+        Closed
+        <span className="block text-zinc-500">{formatDay(r.bal.closedOn)}</span>
+      </span>
+    ) : r.bal.lastPaidOn ? (
+      formatDay(r.bal.lastPaidOn)
+    ) : (
+      <span className="text-zinc-400">None yet</span>
+    );
+
   return (
-    <section className="space-y-4 rounded-[24px] bg-white p-4 ring-1 ring-black/[0.06] shadow-[0_1px_3px_rgba(16,24,40,0.04)] sm:p-5 dark:bg-card dark:ring-white/10">
+    <section className="space-y-4 rounded-[24px] bg-white p-4 ring-1 ring-black/[0.06] shadow-[0_1px_3px_rgba(16,24,40,0.04)] sm:p-6 dark:bg-card dark:ring-white/10">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="font-heading text-xl font-bold">Bills</h2>
         <div className="flex items-center gap-2">
           <div className="flex rounded-xl bg-zinc-100 p-1 dark:bg-white/10" role="group" aria-label="View">
             {(
               [
-                { v: "cards", label: "Cards", icon: LayoutGrid },
+                { v: "cards", label: "Cards", icon: LayoutList },
                 { v: "table", label: "Table", icon: Rows3 },
               ] as const
             ).map(({ v, label, icon: Icon }) => (
@@ -299,7 +324,16 @@ export function BillsSection(props: Props) {
             ))}
           </div>
           {!exporting && (
-            <Button type="button" variant="outline" className="h-11 rounded-xl" onClick={startExport} disabled={shown.length === 0}>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 rounded-xl"
+              disabled={shown.length === 0}
+              onClick={() => {
+                setSelected(new Set(shown.map((r) => r.inv.id)));
+                setExporting(true);
+              }}
+            >
               <Download className="size-4" />
               Export
             </Button>
@@ -333,7 +367,6 @@ export function BillsSection(props: Props) {
         ))}
       </div>
 
-      {/* Export bar */}
       {exporting && (
         <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-primary/[0.06] p-3 ring-1 ring-primary/20">
           <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 text-sm font-medium">
@@ -363,94 +396,93 @@ export function BillsSection(props: Props) {
           {prefs.filter === "unpaid" ? "Nothing pending. All bills are paid." : prefs.filter === "paid" ? "No fully paid bills yet." : "No bills yet."}
         </p>
       ) : prefs.view === "table" ? (
-        <div className="-mx-4 overflow-x-auto sm:mx-0">
-          <table className="w-full min-w-[860px] border-separate border-spacing-0 text-sm">
+        <div className="-mx-4 overflow-x-auto px-4 sm:-mx-6 sm:px-6">
+          <table className="w-full min-w-[1000px] border-separate border-spacing-0 text-sm">
             <thead>
-              <tr className="text-left text-xs font-medium text-zinc-500">
-                {exporting && <th className="w-10 border-b border-black/[0.06] py-3 pl-4 sm:pl-2" />}
-                <th className="w-8 border-b border-black/[0.06] py-3 pl-4 sm:pl-2" />
-                <th className="border-b border-black/[0.06] py-3 pr-3 font-medium">Bill</th>
-                <th className="border-b border-black/[0.06] py-3 pr-3 font-medium">Branch</th>
-                <th className="border-b border-black/[0.06] py-3 pr-3 font-medium">Bill date</th>
-                <th className="border-b border-black/[0.06] py-3 pr-3 text-right font-medium">Amount</th>
-                <th className="border-b border-black/[0.06] py-3 pr-3 text-right font-medium">Received</th>
-                <th className="border-b border-black/[0.06] py-3 pr-3 text-right font-medium">Pending</th>
-                <th className="border-b border-black/[0.06] py-3 pr-3 font-medium">Status</th>
-                <th className="border-b border-black/[0.06] py-3 pr-4 font-medium">Last payment</th>
+              <tr className="text-left text-[13px] text-zinc-400">
+                {exporting && <th className="w-9 pb-3 font-normal" />}
+                <th className="w-9 pb-3 font-normal" />
+                <th className="pb-3 pr-4 font-normal">Bill</th>
+                <th className="pb-3 pr-4 font-normal">Branch &amp; address</th>
+                <th className="pb-3 pr-4 font-normal whitespace-nowrap">Bill date</th>
+                <th className="pb-3 pr-4 text-right font-normal">Amount</th>
+                <th className="pb-3 pr-4 text-right font-normal">Received</th>
+                <th className="pb-3 pr-4 text-right font-normal">Pending</th>
+                <th className="pb-3 pr-4 font-normal">Status</th>
+                <th className="pb-3 font-normal whitespace-nowrap">Last payment</th>
               </tr>
             </thead>
             <tbody>
               {shown.map((r) => {
                 const isOpen = open.has(r.inv.id);
+                const cell = cn("border-t border-black/[0.06] py-4 align-top dark:border-white/10", isOpen && "bg-white dark:bg-card");
                 return (
                   <Fragment key={r.inv.id}>
                     <tr
-                      onClick={() => (exporting ? toggleSel(r.inv.id) : toggleOpen(r.inv.id))}
-                      className={cn("cursor-pointer transition-colors hover:bg-zinc-50 dark:hover:bg-white/5", isOpen && "bg-zinc-50 dark:bg-white/5")}
+                      onClick={() => (exporting ? toggle(setSelected, r.inv.id) : toggle(setOpen, r.inv.id))}
+                      className={cn("cursor-pointer transition-colors", !isOpen && "hover:bg-zinc-50 dark:hover:bg-white/5")}
                     >
                       {exporting && (
-                        <td className="border-b border-black/[0.06] py-3.5 pl-4 sm:pl-2">
-                          <Check checked={selected.has(r.inv.id)} onChange={() => toggleSel(r.inv.id)} label={`Select ${r.inv.doc_number}`} />
+                        <td className={cell}>
+                          <div className="pt-0.5">
+                            <Check checked={selected.has(r.inv.id)} onChange={() => toggle(setSelected, r.inv.id)} label={`Select ${r.inv.doc_number}`} />
+                          </div>
                         </td>
                       )}
-                      <td className="border-b border-black/[0.06] py-3.5 pl-4 sm:pl-2">
+                      <td className={cell}>
                         <button
                           type="button"
                           aria-label={isOpen ? "Hide payments" : "Show payments"}
                           aria-expanded={isOpen}
                           onClick={(e) => {
                             e.stopPropagation();
-                            toggleOpen(r.inv.id);
+                            toggle(setOpen, r.inv.id);
                           }}
-                          className="grid size-7 place-items-center rounded-md text-zinc-400 hover:bg-zinc-100"
+                          className="-mt-0.5 grid size-7 place-items-center rounded-md text-zinc-400 hover:bg-zinc-100"
                         >
                           <ChevronRight className={cn("size-4 transition-transform", isOpen && "rotate-90")} />
                         </button>
                       </td>
-                      <td className="border-b border-black/[0.06] py-3.5 pr-3">
-                        <p className="font-semibold tabular-nums">{r.inv.doc_number}</p>
-                        {r.inv.subject && <p className="max-w-[220px] truncate text-xs text-zinc-500">{r.inv.subject}</p>}
+                      <td className={cn(cell, "pr-4")}>
+                        <p className="font-semibold whitespace-nowrap tabular-nums text-zinc-900 dark:text-zinc-50">{r.inv.doc_number}</p>
+                        {r.inv.subject && <p className="mt-0.5 max-w-[220px] text-zinc-500 break-words">{r.inv.subject}</p>}
                       </td>
-                      <td className="max-w-[180px] truncate border-b border-black/[0.06] py-3.5 pr-3 text-zinc-600 dark:text-zinc-300">{r.branch}</td>
-                      <td className="border-b border-black/[0.06] py-3.5 pr-3 whitespace-nowrap text-zinc-600 dark:text-zinc-300">{formatDay(r.inv.date)}</td>
-                      <td className="border-b border-black/[0.06] py-3.5 pr-3 text-right font-semibold whitespace-nowrap tabular-nums">{rupees(r.bal.total)}</td>
-                      <td className="border-b border-black/[0.06] py-3.5 pr-3 text-right whitespace-nowrap tabular-nums text-emerald-700 dark:text-emerald-400">
+                      <td className={cn(cell, "w-[260px] pr-4")}>
+                        <Place row={r} />
+                      </td>
+                      <td className={cn(cell, "pr-4 whitespace-nowrap text-zinc-700 dark:text-zinc-300")}>{formatDay(r.inv.date)}</td>
+                      <td className={cn(cell, "pr-4 text-right font-semibold whitespace-nowrap tabular-nums text-zinc-900 dark:text-zinc-50")}>
+                        {rupees(r.bal.total)}
+                      </td>
+                      <td className={cn(cell, "pr-4 text-right whitespace-nowrap tabular-nums", r.bal.received > 0 ? "text-emerald-700 dark:text-emerald-400" : "text-zinc-300")}>
                         {r.bal.received > 0 ? rupees(r.bal.received) : "—"}
                       </td>
-                      <td className={cn("border-b border-black/[0.06] py-3.5 pr-3 text-right whitespace-nowrap tabular-nums", r.bal.pending > 0 ? "font-semibold text-red-700 dark:text-red-400" : "text-zinc-400")}>
+                      <td className={cn(cell, "pr-4 text-right whitespace-nowrap tabular-nums", r.bal.pending > 0 ? "font-semibold text-zinc-900 dark:text-zinc-50" : "text-zinc-300")}>
                         {r.bal.pending > 0 ? rupees(r.bal.pending) : "—"}
                       </td>
-                      <td className="border-b border-black/[0.06] py-3.5 pr-3">
-                        <StatusPill status={r.status} />
+                      <td className={cn(cell, "pr-4")}>
+                        <StatusTag status={r.status} />
                       </td>
-                      <td className="border-b border-black/[0.06] py-3.5 pr-4 whitespace-nowrap text-zinc-600 dark:text-zinc-300">
-                        {r.bal.closedOn && r.bal.pending <= 0 ? (
-                          <span>Closed {formatDay(r.bal.closedOn)}</span>
-                        ) : r.bal.lastPaidOn ? (
-                          formatDay(r.bal.lastPaidOn)
-                        ) : (
-                          <span className="text-zinc-400">None yet</span>
-                        )}
-                      </td>
+                      <td className={cn(cell, "whitespace-nowrap text-zinc-700 dark:text-zinc-300")}>{lastPayment(r)}</td>
                     </tr>
                     {isOpen && (
                       <tr>
-                        <td colSpan={exporting ? 10 : 9} className="border-b border-black/[0.06] bg-zinc-50/70 px-4 py-4 sm:pl-12 dark:bg-white/5">
-                          <div className="grid gap-4 md:grid-cols-[1fr_auto]">
-                            <div className="max-w-2xl">
-                              <p className="mb-3 text-xs font-semibold tracking-wide text-zinc-500 uppercase">Payments for {r.inv.doc_number}</p>
-                              <Timeline row={r} payments={payments} onRemove={onRemove} />
+                        <td colSpan={exporting ? 10 : 9} className="pb-5">
+                          <div className="grid gap-6 rounded-2xl bg-white p-5 shadow-[0_10px_30px_-12px_rgba(16,24,40,0.18)] ring-1 ring-black/[0.06] md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] dark:bg-card dark:ring-white/10">
+                            <div className="min-w-0">
+                              <p className="mb-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50">Payments</p>
+                              <PaymentList row={r} payments={payments} onRemove={onRemove} />
                             </div>
-                            <div className="flex flex-wrap items-start gap-2 md:flex-col">
-                              {r.bal.pending > 0 && paymentsReady && (
-                                <Button type="button" className="h-10 rounded-xl" onClick={() => onRecord(r.inv.id)}>
-                                  <IndianRupee className="size-4" />
-                                  Record payment
-                                </Button>
-                              )}
-                              <Button asChild variant="outline" className="h-10 rounded-xl">
-                                <Link href={`/document/${r.inv.id}`}>Open bill</Link>
-                              </Button>
+                            <div className="min-w-0 space-y-4 md:border-l md:border-black/[0.06] md:pl-6 dark:md:border-white/10">
+                              <div>
+                                <p className="mb-1 text-sm font-semibold text-zinc-900 dark:text-zinc-50">Work</p>
+                                <p className="text-sm text-zinc-600 break-words dark:text-zinc-300">{r.inv.subject || "—"}</p>
+                              </div>
+                              <div>
+                                <p className="mb-1 text-sm font-semibold text-zinc-900 dark:text-zinc-50">Branch &amp; address</p>
+                                <Place row={r} className="text-sm" />
+                              </div>
+                              <Actions row={r} paymentsReady={paymentsReady} onRecord={onRecord} />
                             </div>
                           </div>
                         </td>
@@ -463,57 +495,61 @@ export function BillsSection(props: Props) {
           </table>
         </div>
       ) : (
-        <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <ul className="space-y-3">
           {shown.map((r) => (
             <li
               key={r.inv.id}
-              onClick={exporting ? () => toggleSel(r.inv.id) : undefined}
+              onClick={exporting ? () => toggle(setSelected, r.inv.id) : undefined}
               className={cn(
-                "min-w-0 rounded-[20px] p-4 ring-1 ring-black/[0.06] dark:ring-white/10",
+                "rounded-[20px] p-4 ring-1 ring-black/[0.07] sm:p-5 dark:ring-white/10",
                 exporting && "cursor-pointer",
-                exporting && selected.has(r.inv.id) && "ring-2 ring-primary/50"
+                exporting && selected.has(r.inv.id) && "bg-primary/[0.03] ring-2 ring-primary/40"
               )}
             >
-              <div className="flex items-start gap-3">
-                {exporting && (
-                  <div className="pt-0.5">
-                    <Check checked={selected.has(r.inv.id)} onChange={() => toggleSel(r.inv.id)} label={`Select ${r.inv.doc_number}`} />
+              <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+                {/* Left: what and where, and the money */}
+                <div className="min-w-0">
+                  <div className="flex items-start gap-3">
+                    {exporting && (
+                      <div className="pt-0.5">
+                        <Check checked={selected.has(r.inv.id)} onChange={() => toggle(setSelected, r.inv.id)} label={`Select ${r.inv.doc_number}`} />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-lg font-semibold tabular-nums">{r.inv.doc_number}</p>
+                        <StatusTag status={r.status} />
+                      </div>
+                      <p className="text-sm text-zinc-500">Bill date {formatDay(r.inv.date)}</p>
+                    </div>
                   </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <Link href={`/document/${r.inv.id}`} className="font-semibold tabular-nums underline-offset-4 hover:underline">
-                      {r.inv.doc_number}
-                    </Link>
-                    <StatusPill status={r.status} />
+                  {r.inv.subject && <p className="mt-3 text-sm font-medium break-words text-zinc-800 dark:text-zinc-200">{r.inv.subject}</p>}
+                  <Place row={r} className="mt-1 text-sm" />
+
+                  <div className="mt-4 grid grid-cols-3 gap-2 rounded-2xl bg-zinc-50 p-3 text-sm tabular-nums dark:bg-white/5">
+                    <span className="text-zinc-500">
+                      Amount<b className="block text-base text-zinc-900 dark:text-zinc-50">{rupees(r.bal.total)}</b>
+                    </span>
+                    <span className="text-zinc-500">
+                      Received<b className="block text-base text-emerald-700 dark:text-emerald-400">{rupees(r.bal.received)}</b>
+                    </span>
+                    <span className="text-zinc-500">
+                      Pending<b className="block text-base text-zinc-900 dark:text-zinc-50">{rupees(r.bal.pending)}</b>
+                    </span>
                   </div>
-                  <p className="truncate text-sm text-zinc-500">{[r.branch, r.inv.subject].filter(Boolean).join(" · ")}</p>
+                  {!exporting && (
+                    <div className="mt-4">
+                      <Actions row={r} paymentsReady={paymentsReady} onRecord={onRecord} />
+                    </div>
+                  )}
+                </div>
+
+                {/* Right: the payment story */}
+                <div className="min-w-0 md:border-l md:border-black/[0.06] md:pl-5 dark:md:border-white/10">
+                  <p className="mb-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50">Payments</p>
+                  <PaymentList row={r} payments={payments} onRemove={onRemove} />
                 </div>
               </div>
-
-              <div className="mt-3 grid grid-cols-3 gap-2 text-sm tabular-nums">
-                <span className="text-zinc-500">
-                  Amount<b className="block text-base text-foreground">{rupees(r.bal.total)}</b>
-                </span>
-                <span className="text-zinc-500">
-                  Received<b className="block text-base text-emerald-700 dark:text-emerald-400">{rupees(r.bal.received)}</b>
-                </span>
-                <span className="text-zinc-500">
-                  Pending
-                  <b className={cn("block text-base", r.bal.pending > 0 ? "text-red-700 dark:text-red-400" : "text-foreground")}>{rupees(r.bal.pending)}</b>
-                </span>
-              </div>
-
-              <div className="mt-4 border-t border-dashed border-black/10 pt-4 dark:border-white/10">
-                <Timeline row={r} payments={payments} onRemove={onRemove} />
-              </div>
-
-              {!exporting && r.bal.pending > 0 && paymentsReady && (
-                <Button type="button" variant="outline" className="mt-4 h-11 w-full rounded-xl" onClick={() => onRecord(r.inv.id)}>
-                  <IndianRupee className="size-4" />
-                  Record payment
-                </Button>
-              )}
             </li>
           ))}
         </ul>

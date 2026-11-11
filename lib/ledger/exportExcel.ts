@@ -118,7 +118,7 @@ function billsSheet(ws: Worksheet, input: ExportInput) {
   const today = formatDay(todayISO());
   ws.columns = [
     { width: 16 }, // A Bill no
-    { width: 20 }, // B Branch
+    { width: 30 }, // B Branch & address
     { width: 14 }, // C Bill date
     { width: 38 }, // D Work
     { width: 17 }, // E Bill amount
@@ -158,7 +158,7 @@ function billsSheet(ws: Worksheet, input: ExportInput) {
   ws.getRow(9).height = 24;
 
   const head = 11;
-  headerRow(ws, head, ["Bill no.", "Branch", "Bill date", "Work / payment", "Bill amount", "Received", "Pending", "Status"], 4);
+  headerRow(ws, head, ["Bill no.", "Branch & address", "Bill date", "Work / payment", "Bill amount", "Received", "Pending", "Status"], 4);
   ws.getCell(`H${head}`).alignment = { horizontal: "center", vertical: "middle" };
 
   let row = head + 1;
@@ -178,10 +178,13 @@ function billsSheet(ws: Worksheet, input: ExportInput) {
     st.fill = fill(STATUS[b.status].bg);
     st.alignment = { horizontal: "center", vertical: "middle" };
     for (let c = 1; c <= 4; c++) {
-      r.getCell(c).alignment = { vertical: "middle", wrapText: c === 4 };
+      r.getCell(c).alignment = { vertical: "top", wrapText: c === 2 || c === 4 };
       if (c > 1) r.getCell(c).font = font({ color: c === 4 ? INK : MUTED });
     }
-    r.height = 22;
+    // Taller row when the address has several lines, so nothing is cut off.
+    const lines = Math.max(b.branch.split("\n").length, Math.ceil(b.subject.length / 40), 1);
+    r.height = Math.max(22, lines * 15 + 6);
+    for (const c of [5, 6, 7, 8]) r.getCell(c).alignment = { ...r.getCell(c).alignment, vertical: "top" };
     row++;
 
     // The bill's payment story, one line each.

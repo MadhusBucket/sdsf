@@ -220,7 +220,7 @@ export function LedgerClient() {
                     <span
                       className={cn(
                         "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold",
-                        s.pending > 0 ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"
+                        s.pending > 0 ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"
                       )}
                     >
                       {s.pending > 0 ? "Pending" : "All paid"}
@@ -236,7 +236,7 @@ export function LedgerClient() {
                     </span>
                     <span className="text-zinc-500">
                       Pending
-                      <b className={cn("block text-base", s.pending > 0 ? "text-red-700 dark:text-red-400" : "text-foreground")}>
+                      <b className="block text-base text-foreground">
                         {rupees(s.pending)}
                       </b>
                     </span>

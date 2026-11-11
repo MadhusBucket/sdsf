@@ -88,7 +88,14 @@ export function CompanyLedgerClient({
     .filter((x): x is { inv: typeof x.inv; bal: NonNullable<typeof x.bal> } => !!x.bal)
     .map(({ inv, bal }) => {
       const b = branches.find((x) => x.id === inv.company_id);
-      return { inv, bal, branch: b ? branchLabel(b) : "", status: billStatus(bal) };
+      return {
+        inv,
+        bal,
+        // Landmark (if any) and the full address, both shown in full.
+        branch: b?.branch?.trim() ?? "",
+        address: b?.address?.trim() ?? "",
+        status: billStatus(bal),
+      };
     });
   const companyDetail = many
     ? `${branches.length} branches`
@@ -252,7 +259,7 @@ function EdgeRow({ label, sub, value, tone }: { label: string; sub: string; valu
       <p
         className={cn(
           "text-lg font-bold tabular-nums",
-          tone === "bad" && "text-red-700 dark:text-red-400",
+          tone === "bad" && "text-amber-700 dark:text-amber-400",
           tone === "good" && "text-emerald-700 dark:text-emerald-400"
         )}
       >
