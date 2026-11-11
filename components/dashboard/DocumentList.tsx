@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { format } from "date-fns";
+import { ChevronRight, MapPin } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import type { DocumentStatus } from "@/lib/types/database";
@@ -53,109 +53,118 @@ const STATUS_LABELS: Record<DocumentStatus, string> = {
   replaced: "Replaced",
 };
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "6 Nov 2026" from the document's own date (the date printed on the PDF). */
+function docDay(doc: DashboardDocument) {
+  const raw = doc.date || doc.created_at;
+  const [y, m, d] = raw.slice(0, 10).split("-").map(Number);
+  return y && m && d ? `${d} ${MONTHS[m - 1]} ${y}` : "";
+}
+
+/** ₹82,364 for round amounts, ₹82,364.50 only when there are paise. */
+function amountText(value: number) {
+  const n = Number(value ?? 0);
+  if (Number.isInteger(n)) return `₹${n.toLocaleString("en-IN")}`;
+  return formatIndianCurrency(n);
+}
+
 export function DocumentList({ documents, documentType, query = "" }: DocumentListProps) {
   const words = searchWords(query);
   if (documents.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed bg-muted/30 px-4 py-10 text-center text-sm text-muted-foreground">
-        No documents yet. Create your first{" "}
-        {documentType === "quotation" ? "quotation" : "invoice"}!
+      <div className="rounded-xl border border-dashed bg-muted/30 px-4 py-10 text-center text-sm text-muted-foreground">
+        {words.length
+          ? "Nothing matches your search. Try a shorter word, like “jali” or “sheet”."
+          : `No ${documentType === "quotation" ? "quotations" : "invoices"} here yet.`}
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
       {documents.map((doc) => {
-        const addressLines = doc.companies?.address
-          ?.split("\n")
-          .map((l) => l.trim())
-          .filter(Boolean) ?? [];
-        const hasIntraGst =
-          (doc.cgst_amount ?? 0) > 0 || (doc.sgst_amount ?? 0) > 0;
+        const hasIntraGst = (doc.cgst_amount ?? 0) > 0 || (doc.sgst_amount ?? 0) > 0;
         const hasInterGst =
-          !hasIntraGst &&
-          (doc.grand_total ?? 0) - (doc.subtotal ?? 0) - (doc.round_off ?? 0) > 0;
+          !hasIntraGst && (doc.grand_total ?? 0) - (doc.subtotal ?? 0) - (doc.round_off ?? 0) > 0;
         const hasGst = hasIntraGst || hasInterGst;
         const itemHit = matchedItemLine(doc, query);
+        const company = doc.companies?.name ?? "Unknown company";
+        const branch = doc.companies?.branch?.trim();
+        const inactive = doc.status === "void" || doc.status === "replaced";
+        const day = docDay(doc);
 
         return (
-          <Link
-            key={doc.id}
-            href={`/document/${doc.id}`}
-            className="block rounded-lg border bg-card p-4 shadow-xs transition-shadow hover:shadow-md"
-          >
-            {/* Top row: status badge + created date */}
-            <div className="mb-1 flex items-center justify-between">
-              <Badge
-                variant="outline"
-                className={cn(STATUS_STYLES[doc.status], "text-xs font-medium")}
-              >
-                {STATUS_LABELS[doc.status]}
-              </Badge>
-              <div className="text-right">
-                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Created on</div>
-                <div className="text-sm font-medium">
-                  {format(new Date(doc.created_at), "dd MMM yyyy")}
+          <li key={doc.id} className="min-w-0">
+            <Link
+              href={`/document/${doc.id}`}
+              aria-label={`${doc.doc_number}, ${company}${branch ? `, ${branch}` : ""}, ${amountText(doc.grand_total)}, ${STATUS_LABELS[doc.status]}`}
+              className={cn(
+                "group flex h-full flex-col gap-2.5 rounded-xl border bg-card p-4 transition-all hover:border-primary/40 hover:shadow-md active:scale-[0.99]",
+                inactive && "opacity-60"
+              )}
+            >
+              {/* Who and how much: what you look for first */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="line-clamp-2 text-base font-semibold leading-snug">
+                    <Highlight text={company} words={words} />
+                  </p>
+                  {branch && (
+                    <p className="mt-0.5 flex items-center gap-1 text-sm text-muted-foreground">
+                      <MapPin className="size-3.5 shrink-0" />
+                      <span className="truncate">
+                        <Highlight text={branch} words={words} />
+                      </span>
+                    </p>
+                  )}
+                </div>
+                <div className="shrink-0 text-right">
+                  <p
+                    className={cn(
+                      "text-lg font-bold tabular-nums leading-tight sm:text-xl",
+                      inactive && "line-through"
+                    )}
+                  >
+                    {amountText(doc.grand_total)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{hasGst ? "incl. GST" : "no GST"}</p>
                 </div>
               </div>
-            </div>
 
-            {/* Document number */}
-            <p className="mt-2 text-lg font-bold leading-tight tracking-tight">
-              {doc.doc_number}
-            </p>
-
-            {/* Company info */}
-            <div className="mt-1 space-y-1">
-              {doc.companies?.branch && (
-                <Badge variant="secondary" className="w-fit text-xs">
-                  {doc.companies.branch}
-                </Badge>
-              )}
-              <p className="text-sm font-medium">
-                {doc.companies?.name ?? "Unknown company"}
-              </p>
-              {addressLines.length > 0 && (
-                <p className="text-xs text-muted-foreground whitespace-pre-line">
-                  {addressLines.join("\n")}
+              {/* What the work was */}
+              {doc.subject && (
+                <p className="line-clamp-1 text-sm text-muted-foreground">
+                  <Highlight text={doc.subject} words={words} />
                 </p>
               )}
-            </div>
 
-            {/* Subject */}
-            {doc.subject && (
-              <div className="mt-4 rounded-lg border bg-muted/50 p-3">
-                <p className="mb-1 text-xs text-muted-foreground">Subject</p>
-                <p className="line-clamp-2 text-sm font-medium">{doc.subject}</p>
-              </div>
-            )}
-
-            {itemHit && (
-              <p className="mt-3 rounded-lg bg-muted px-3 py-2 text-sm">
-                <span className="text-muted-foreground">Item: </span>
-                <Highlight text={itemHit} words={words} />
-              </p>
-            )}
-
-            {/* Bottom row: total + GST badge */}
-            <div className="-mx-4 mt-4 flex items-end justify-between border-t px-4 pt-3">
-              <div>
-                <p className="mb-0.5 text-xs text-muted-foreground">Total Amount</p>
-                <p className="text-2xl font-bold tabular-nums text-primary">
-                  {formatIndianCurrency(doc.grand_total)}
+              {itemHit && (
+                <p className="rounded-lg bg-muted px-3 py-2 text-sm">
+                  <span className="text-muted-foreground">Item: </span>
+                  <Highlight text={itemHit} words={words} />
                 </p>
+              )}
+
+              {/* Which bill and when */}
+              <div className="mt-auto flex items-center justify-between gap-2 border-t pt-2.5">
+                <p className="min-w-0 truncate text-sm">
+                  <span className="font-semibold tabular-nums">
+                    <Highlight text={doc.doc_number} words={words} />
+                  </span>
+                  {day && <span className="text-muted-foreground"> · {day}</span>}
+                </p>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Badge variant="outline" className={cn(STATUS_STYLES[doc.status], "text-xs font-medium")}>
+                    {STATUS_LABELS[doc.status]}
+                  </Badge>
+                  <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                </div>
               </div>
-              <Badge
-                variant={hasGst ? "secondary" : "outline"}
-                className="text-xs whitespace-nowrap"
-              >
-                {hasGst ? "Incl. 18% GST" : "No GST"}
-              </Badge>
-            </div>
-          </Link>
+            </Link>
+          </li>
         );
       })}
-    </div>
+    </ul>
   );
 }
