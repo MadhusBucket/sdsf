@@ -23,7 +23,7 @@ import { rememberListTab } from "@/components/nav/lastListTab";
 
 import { DocumentList } from "./DocumentList";
 import { DateFilter } from "./DateFilter";
-import { KPICards, type KpiPeriod } from "./KPICards";
+import { KPICards } from "./KPICards";
 import { fuzzyMatchesDocument, SearchBar, type DashboardDocument } from "./SearchBar";
 import { StatusFilter, type StatusFilterValue } from "./StatusFilter";
 
@@ -63,7 +63,6 @@ export function DashboardClient({ type }: { type: DocumentType }) {
   const [status, setStatus] = useState<StatusFilterValue>("all");
   const [company, setCompany] = useState<string>(ALL_COMPANIES);
   const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
-  const [kpiDateFilter, setKpiDateFilter] = useState<KpiPeriod>("30days");
   const [restored, setRestored] = useState(false);
   const restoredRef = useRef(false);
 
@@ -210,7 +209,7 @@ export function DashboardClient({ type }: { type: DocumentType }) {
           </Button>
         </div>
 
-        <KPICards documents={documents} type={type} period={kpiDateFilter} onPeriodChange={setKpiDateFilter} />
+        <KPICards documents={documents} type={type} />
 
         <SearchBar query={query} onChange={setQuery} />
 
