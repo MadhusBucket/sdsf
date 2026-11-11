@@ -1,126 +1,241 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarRange } from "lucide-react";
+import { ArrowDown, ArrowUp } from "lucide-react";
 
 import type { DocumentType } from "@/lib/types/database";
 import { cn } from "@/lib/utils";
 
 import type { DashboardDocument } from "./SearchBar";
 
-type Range = "month" | "year";
-
 interface KPICardsProps {
   documents: DashboardDocument[];
   type: DocumentType;
 }
 
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const LINE = "#7c5cf2"; // purple from the inspiration
 
-/** Local midnight of the document's own date (the date printed on the PDF). */
-function dayOf(doc: DashboardDocument) {
-  const raw = (doc.date || doc.created_at || "").slice(0, 10);
-  const [y, m, d] = raw.split("-").map(Number);
-  return y && m && d ? new Date(y, m - 1, d).getTime() : 0;
+/** Month index (year*12 + month) of the document's own date. */
+function monthOf(doc: DashboardDocument) {
+  const raw = (doc.date || doc.created_at || "").slice(0, 7);
+  const [y, m] = raw.split("-").map(Number);
+  return y && m ? y * 12 + (m - 1) : -1;
+}
+
+/** Day of month (1–31) of the document's own date. */
+function dayOfMonth(doc: DashboardDocument) {
+  return Number((doc.date || doc.created_at || "").slice(8, 10)) || 0;
 }
 
 const rupees = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
 
+/** Short money for chart labels: ₹50K, ₹1.5L, ₹2Cr. */
+function short(n: number) {
+  if (n >= 1e7) return `₹${+(n / 1e7).toFixed(1)}Cr`;
+  if (n >= 1e5) return `₹${+(n / 1e5).toFixed(1)}L`;
+  if (n >= 1e3) return `₹${Math.round(n / 1e3)}K`;
+  return `₹${Math.round(n)}`;
+}
+
+/** A round step for the chart's guide lines (₹25K, ₹50K, ₹1L, ₹2L, ...). */
+function niceStep(max: number) {
+  const raw = Math.max(max, 1) / 4;
+  const pow = 10 ** Math.floor(Math.log10(raw));
+  for (const m of [1, 2, 2.5, 5, 10]) if (m * pow >= raw) return m * pow;
+  return 10 * pow;
+}
+
 /**
- * One simple card: how much was billed (or quoted) this month or this financial
- * year, how many documents, and last month / last year as a plain number to compare.
- * Cancelled and replaced documents are not counted. Nothing depends on statuses.
- *
- * A second card ("To collect" for invoices, "Became invoices" for quotations)
- * will sit beside this one once payments and quotation conversion exist.
+ * Earnings card: this month's total with up/down against last month,
+ * what is still pending (invoices), and a 12-month line graph.
+ * Cancelled and replaced documents are never counted.
  */
 export function KPICards({ documents, type }: KPICardsProps) {
-  const [range, setRange] = useState<Range>("month");
-  const word = type === "invoice" ? "invoice" : "quotation";
+  const isInvoice = type === "invoice";
+  const word = isInvoice ? "invoice" : "quotation";
 
   const s = useMemo(() => {
     const docs = documents.filter((d) => d.type === type && d.status !== "void" && d.status !== "replaced");
     const now = new Date();
-    let from: number, to: number, prevFrom: number, prevTo: number, label: string, prevLabel: string;
-    if (range === "month") {
-      from = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-      to = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime();
-      prevFrom = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
-      prevTo = from;
-      label = `${MONTHS[now.getMonth()]} ${now.getFullYear()}`;
-      prevLabel = `Last month (${MONTHS[new Date(prevFrom).getMonth()]})`;
-    } else {
-      // Financial year, April to March.
-      const start = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
-      from = new Date(start, 3, 1).getTime();
-      to = new Date(start + 1, 3, 1).getTime();
-      prevFrom = new Date(start - 1, 3, 1).getTime();
-      prevTo = from;
-      label = `Apr ${start} – Mar ${start + 1}`;
-      prevLabel = `Last year (${SHORT[3]} ${start - 1} – ${SHORT[2]} ${start})`;
-    }
-    const inRange = (a: number, b: number) => docs.filter((d) => dayOf(d) >= a && dayOf(d) < b);
-    const cur = inRange(from, to);
-    const prev = inRange(prevFrom, prevTo);
-    const sum = (l: DashboardDocument[]) => l.reduce((t, d) => t + Number(d.grand_total ?? 0), 0);
-    return { total: sum(cur), count: cur.length, prevTotal: sum(prev), prevCount: prev.length, label, prevLabel };
-  }, [documents, type, range]);
+    const thisMonth = now.getFullYear() * 12 + now.getMonth();
+    const months = Array.from({ length: 12 }, (_, i) => thisMonth - 11 + i);
+    const totals = months.map((m) =>
+      docs.filter((d) => monthOf(d) === m).reduce((t, d) => t + Number(d.grand_total ?? 0), 0)
+    );
+    const counts = months.map((m) => docs.filter((d) => monthOf(d) === m).length);
+    const current = totals[11];
+    // Fair comparison: this month so far vs the same days of last month (e.g. 1–11 Nov vs 1–11 Oct).
+    const today = now.getDate();
+    const previous = docs
+      .filter((d) => monthOf(d) === thisMonth - 1 && dayOfMonth(d) <= today)
+      .reduce((t, d) => t + Number(d.grand_total ?? 0), 0);
+    const change = previous > 0 ? ((current - previous) / previous) * 100 : null;
+    const lastMonthName = MONTHS[(thisMonth - 1) % 12];
+    const compareLabel = `vs 1–${Math.min(today, 31)} ${lastMonthName}`;
+    // Pending: invoices not marked Paid. Becomes exact once payments are recorded in the ledger.
+    const pendingDocs = docs.filter((d) => d.status !== "paid");
+    const pending = pendingDocs.reduce((t, d) => t + Number(d.grand_total ?? 0), 0);
+    return { months, totals, counts, current, previous, change, compareLabel, pending, pendingCount: pendingDocs.length };
+  }, [documents, type]);
+
+  const [active, setActive] = useState<number | null>(null);
+  const shown = active ?? 11;
+
+  const step = niceStep(Math.max(...s.totals));
+  const top = step * 4;
+  const xs = s.totals.map((_, i) => (i / 11) * 100);
+  const ys = s.totals.map((v) => 100 - (v / top) * 100);
+  const line = xs.map((x, i) => `${i ? "L" : "M"}${x.toFixed(2)},${ys[i].toFixed(2)}`).join(" ");
+  const area = `${line} L100,100 L0,100 Z`;
+  const label = (m: number) => MONTHS[m % 12];
 
   return (
-    <section>
-      <article className="overflow-hidden rounded-[24px] border border-black/[0.06] bg-white shadow-[0_1px_3px_rgba(16,24,40,0.04)] dark:border-white/10 dark:bg-card">
-        <div className="p-5 sm:p-6">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-[15px] font-medium text-zinc-600 dark:text-zinc-300">
-              {type === "invoice" ? "Billed" : "Quoted"}
-            </p>
-            {/* This month / This year */}
-            <div className="flex rounded-xl border border-black/10 bg-[#f6f6f8] p-0.5 dark:border-white/10 dark:bg-white/5" role="group" aria-label="Period">
-              {(["month", "year"] as Range[]).map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  aria-pressed={range === r}
-                  onClick={() => setRange(r)}
+    <section className="overflow-hidden rounded-[24px] border border-black/[0.06] bg-white shadow-[0_1px_3px_rgba(16,24,40,0.04)] dark:border-white/10 dark:bg-card">
+      {/* Numbers */}
+      <div className="m-2 grid grid-cols-1 gap-2 rounded-[18px] bg-[#f6f5fb] p-4 sm:grid-cols-2 sm:p-5 dark:bg-white/5">
+        <div>
+          <p className="text-sm text-zinc-500">{isInvoice ? "Billed this month" : "Quoted this month"}</p>
+          <p className="font-heading text-[30px] leading-tight font-bold tracking-tight tabular-nums text-zinc-900 dark:text-zinc-50">
+            {rupees(s.current)}
+          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+            {s.change !== null ? (
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 font-semibold",
+                  s.change >= 0 ? "text-emerald-600" : "text-red-600"
+                )}
+              >
+                <span
                   className={cn(
-                    "min-h-9 rounded-[10px] px-3.5 text-sm font-medium transition-colors",
-                    range === r
-                      ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-white"
-                      : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                    "grid size-5 place-items-center rounded-full text-white",
+                    s.change >= 0 ? "bg-emerald-500" : "bg-red-500"
                   )}
                 >
-                  {r === "month" ? "This month" : "This year"}
+                  {s.change >= 0 ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />}
+                </span>
+                {Math.abs(s.change).toFixed(0)}%
+              </span>
+            ) : null}
+            <span className="text-zinc-500">
+              {s.change !== null ? s.compareLabel : "Nothing in the same days last month"} ·{" "}
+              {s.counts[11]} {s.counts[11] === 1 ? word : `${word}s`}
+            </span>
+          </div>
+        </div>
+        {isInvoice && (
+          <div className="sm:border-l sm:border-black/[0.06] sm:pl-5 dark:sm:border-white/10">
+            <p className="text-sm text-zinc-500">Pending</p>
+            <p className="font-heading text-[30px] leading-tight font-bold tracking-tight tabular-nums text-amber-600">
+              {rupees(s.pending)}
+            </p>
+            <p className="mt-1 text-sm text-zinc-500">
+              {s.pendingCount} {s.pendingCount === 1 ? "invoice" : "invoices"} not marked paid
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* 12-month graph */}
+      <div className="px-4 pt-3 pb-4 sm:px-6">
+        <p className="mb-3 text-sm font-medium text-zinc-600 dark:text-zinc-300">
+          {isInvoice ? "Billed" : "Quoted"} each month
+        </p>
+        <div className="flex gap-2">
+          {/* Y axis */}
+          <div className="relative h-44 w-11 shrink-0 text-right text-[11px] text-zinc-400 tabular-nums">
+            {[4, 3, 2, 1, 0].map((k) => (
+              <span key={k} className="absolute right-0 -translate-y-1/2" style={{ top: `${100 - k * 25}%` }}>
+                {short(step * k)}
+              </span>
+            ))}
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div
+              className="relative h-44"
+              onMouseLeave={() => setActive(null)}
+              role="img"
+              aria-label={`${isInvoice ? "Billed" : "Quoted"} each month for the last 12 months`}
+            >
+              {/* Guide lines */}
+              {[0, 1, 2, 3, 4].map((k) => (
+                <div
+                  key={k}
+                  className="absolute inset-x-0 border-t border-dashed border-black/[0.08] dark:border-white/10"
+                  style={{ top: `${k * 25}%` }}
+                />
+              ))}
+              <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 size-full overflow-visible">
+                <defs>
+                  <linearGradient id={`fill-${type}`} x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stopColor={LINE} stopOpacity="0.18" />
+                    <stop offset="100%" stopColor={LINE} stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <path d={area} fill={`url(#fill-${type})`} />
+                <path d={line} fill="none" stroke={LINE} strokeWidth="2.5" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+              </svg>
+              {/* Dashed line under the selected month */}
+              <div
+                className="absolute bottom-0 border-l-2 border-dashed"
+                style={{ left: `${xs[shown]}%`, top: `${ys[shown]}%`, borderColor: `${LINE}55` }}
+              />
+              {/* Points: tap or hover to see a month */}
+              {xs.map((x, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onMouseEnter={() => setActive(i)}
+                  onFocus={() => setActive(i)}
+                  onClick={() => setActive(i)}
+                  aria-label={`${label(s.months[i])}: ${rupees(s.totals[i])}`}
+                  className="absolute grid size-7 -translate-x-1/2 -translate-y-1/2 place-items-center"
+                  style={{ left: `${x}%`, top: `${ys[i]}%` }}
+                >
+                  <span
+                    className={cn(
+                      "rounded-full border-2 bg-white transition-all",
+                      i === shown ? "size-4 ring-4" : "size-2.5"
+                    )}
+                    style={{ borderColor: LINE, ["--tw-ring-color" as string]: `${LINE}33` }}
+                  />
                 </button>
+              ))}
+              {/* Value bubble */}
+              <div
+                className="pointer-events-none absolute z-10 rounded-full border border-black/10 bg-white px-3 py-1 text-xs whitespace-nowrap shadow-sm dark:bg-zinc-800"
+                style={{
+                  top: `${ys[shown]}%`,
+                  left: `${xs[shown]}%`,
+                  transform: `translate(${shown > 8 ? "-100%" : shown < 3 ? "0%" : "-50%"}, calc(-100% - 14px))`,
+                }}
+              >
+                <span className="text-zinc-500">{label(s.months[shown])}</span>{" "}
+                <b className="tabular-nums text-zinc-900 dark:text-zinc-50">{rupees(s.totals[shown])}</b>
+              </div>
+            </div>
+
+            {/* X axis */}
+            <div className="relative mt-2 h-4 text-[11px] text-zinc-400">
+              {s.months.map((m, i) => (
+                <span
+                  key={m}
+                  className={cn(
+                    "absolute -translate-x-1/2",
+                    i === shown && "font-semibold text-zinc-900 dark:text-zinc-50",
+                    i % 2 === 1 && i !== shown && i !== 11 && "max-sm:hidden"
+                  )}
+                  style={{ left: `${xs[i]}%` }}
+                >
+                  {label(m)}
+                </span>
               ))}
             </div>
           </div>
-
-          <p className="mt-2 font-heading text-[36px] leading-tight font-bold tracking-tight tabular-nums text-zinc-900 sm:text-[40px] dark:text-zinc-50">
-            {rupees(s.total)}
-          </p>
-
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-              {s.count} {s.count === 1 ? word : `${word}s`}
-            </span>
-            <span className="flex items-center gap-1.5 text-sm text-zinc-500">
-              <CalendarRange className="size-4" />
-              {s.label}
-            </span>
-          </div>
         </div>
-
-        {/* For comparison, as plain numbers */}
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-black/[0.06] bg-[#fafafb] px-5 py-3.5 sm:px-6 dark:border-white/10 dark:bg-white/[0.03]">
-          <span className="text-sm text-zinc-500">{s.prevLabel}</span>
-          <span className="text-sm tabular-nums text-zinc-700 dark:text-zinc-300">
-            <b className="font-semibold text-zinc-900 dark:text-zinc-100">{rupees(s.prevTotal)}</b>
-            {" · "}
-            {s.prevCount} {s.prevCount === 1 ? word : `${word}s`}
-          </span>
-        </div>
-      </article>
+      </div>
     </section>
   );
 }

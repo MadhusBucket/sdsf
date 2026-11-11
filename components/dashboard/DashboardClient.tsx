@@ -213,37 +213,8 @@ export function DashboardClient({ type }: { type: DocumentType }) {
 
         <SearchBar query={query} onChange={setQuery} />
 
-        <Select value={company} onValueChange={setCompany}>
-          <SelectTrigger className="h-11 w-full" aria-label="Filter by company">
-            <SelectValue placeholder="All companies">
-              {companyFilter ? companyFilter.label : "All companies"}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent className="max-h-[60vh]">
-            <SelectItem value={ALL_COMPANIES}>All companies</SelectItem>
-            {companyGroups.map((g) =>
-              g.branches.length === 1 ? (
-                <SelectItem key={g.key} value={`c:${g.branches[0].id}`}>
-                  {g.name} ({g.count})
-                </SelectItem>
-              ) : (
-                <SelectGroup key={g.key}>
-                  <SelectLabel className="pt-3 font-semibold text-foreground">{g.name}</SelectLabel>
-                  <SelectItem value={`g:${g.key}`} className="pl-6">
-                    All branches ({g.count})
-                  </SelectItem>
-                  {g.branches.map((b) => (
-                    <SelectItem key={b.id} value={`c:${b.id}`} className="pl-6">
-                      {branchLabel(b)} ({b.count})
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              )
-            )}
-          </SelectContent>
-        </Select>
 
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <p className="text-sm text-muted-foreground">
             {plural}{" "}
             <span className="font-medium text-foreground">{filteredDocuments.length}</span>
@@ -260,7 +231,36 @@ export function DashboardClient({ type }: { type: DocumentType }) {
               </>
             )}
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full min-w-0 items-center gap-2 sm:ml-auto sm:w-auto">
+            <Select value={company} onValueChange={setCompany}>
+              <SelectTrigger className="h-11 min-w-0 flex-1 border-gray-300 bg-white sm:w-48 sm:flex-none" aria-label="Filter by company">
+                <SelectValue placeholder="All companies">
+                  <span className="truncate">{companyFilter ? companyFilter.label : "All companies"}</span>
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent className="max-h-[60vh]">
+                <SelectItem value={ALL_COMPANIES}>All companies</SelectItem>
+                {companyGroups.map((g) =>
+                  g.branches.length === 1 ? (
+                    <SelectItem key={g.key} value={`c:${g.branches[0].id}`}>
+                      {g.name} ({g.count})
+                    </SelectItem>
+                  ) : (
+                    <SelectGroup key={g.key}>
+                      <SelectLabel className="pt-3 font-semibold text-foreground">{g.name}</SelectLabel>
+                      <SelectItem value={`g:${g.key}`} className="pl-6">
+                        All branches ({g.count})
+                      </SelectItem>
+                      {g.branches.map((b) => (
+                        <SelectItem key={b.id} value={`c:${b.id}`} className="pl-6">
+                          {branchLabel(b)} ({b.count})
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  )
+                )}
+              </SelectContent>
+            </Select>
             <StatusFilter value={status} onChange={setStatus} />
             <DateFilter selectedDate={dateFilter} onDateChange={setDateFilter} />
           </div>
