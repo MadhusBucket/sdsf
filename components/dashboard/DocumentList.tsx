@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight, MapPin } from "lucide-react";
+import { format } from "date-fns";
+import { Building2, CalendarDays, ChevronRight, MapPin } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import type { DocumentStatus } from "@/lib/types/database";
@@ -53,22 +54,6 @@ const STATUS_LABELS: Record<DocumentStatus, string> = {
   replaced: "Replaced",
 };
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-/** "6 Nov 2026" from the document's own date (the date printed on the PDF). */
-function docDay(doc: DashboardDocument) {
-  const raw = doc.date || doc.created_at;
-  const [y, m, d] = raw.slice(0, 10).split("-").map(Number);
-  return y && m && d ? `${d} ${MONTHS[m - 1]} ${y}` : "";
-}
-
-/** ₹82,364 for round amounts, ₹82,364.50 only when there are paise. */
-function amountText(value: number) {
-  const n = Number(value ?? 0);
-  if (Number.isInteger(n)) return `₹${n.toLocaleString("en-IN")}`;
-  return formatIndianCurrency(n);
-}
-
 export function DocumentList({ documents, documentType, query = "" }: DocumentListProps) {
   const words = searchWords(query);
   if (documents.length === 0) {
@@ -82,8 +67,13 @@ export function DocumentList({ documents, documentType, query = "" }: DocumentLi
   }
 
   return (
-    <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
+    <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
       {documents.map((doc) => {
+        const addressLines =
+          doc.companies?.address
+            ?.split("\n")
+            .map((l) => l.trim())
+            .filter(Boolean) ?? [];
         const hasIntraGst = (doc.cgst_amount ?? 0) > 0 || (doc.sgst_amount ?? 0) > 0;
         const hasInterGst =
           !hasIntraGst && (doc.grand_total ?? 0) - (doc.subtotal ?? 0) - (doc.round_off ?? 0) > 0;
@@ -92,73 +82,95 @@ export function DocumentList({ documents, documentType, query = "" }: DocumentLi
         const company = doc.companies?.name ?? "Unknown company";
         const branch = doc.companies?.branch?.trim();
         const inactive = doc.status === "void" || doc.status === "replaced";
-        const day = docDay(doc);
 
         return (
           <li key={doc.id} className="min-w-0">
             <Link
               href={`/document/${doc.id}`}
-              aria-label={`${doc.doc_number}, ${company}${branch ? `, ${branch}` : ""}, ${amountText(doc.grand_total)}, ${STATUS_LABELS[doc.status]}`}
               className={cn(
-                "group flex h-full flex-col gap-2.5 rounded-xl border bg-card p-4 transition-all hover:border-primary/40 hover:shadow-md active:scale-[0.99]",
+                "group flex h-full flex-col overflow-hidden rounded-xl border bg-card shadow-xs transition-all hover:border-primary/40 hover:shadow-md active:scale-[0.995]",
                 inactive && "opacity-60"
               )}
             >
-              {/* Who and how much: what you look for first */}
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="line-clamp-2 text-base font-semibold leading-snug">
-                    <Highlight text={company} words={words} />
-                  </p>
-                  {branch && (
-                    <p className="mt-0.5 flex items-center gap-1 text-sm text-muted-foreground">
-                      <MapPin className="size-3.5 shrink-0" />
-                      <span className="truncate">
-                        <Highlight text={branch} words={words} />
-                      </span>
-                    </p>
-                  )}
-                </div>
-                <div className="shrink-0 text-right">
-                  <p
-                    className={cn(
-                      "text-lg font-bold tabular-nums leading-tight sm:text-xl",
-                      inactive && "line-through"
-                    )}
-                  >
-                    {amountText(doc.grand_total)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{hasGst ? "incl. GST" : "no GST"}</p>
-                </div>
-              </div>
-
-              {/* What the work was */}
-              {doc.subject && (
-                <p className="line-clamp-1 text-sm text-muted-foreground">
-                  <Highlight text={doc.subject} words={words} />
-                </p>
-              )}
-
-              {itemHit && (
-                <p className="rounded-lg bg-muted px-3 py-2 text-sm">
-                  <span className="text-muted-foreground">Item: </span>
-                  <Highlight text={itemHit} words={words} />
-                </p>
-              )}
-
-              {/* Which bill and when */}
-              <div className="mt-auto flex items-center justify-between gap-2 border-t pt-2.5">
-                <p className="min-w-0 truncate text-sm">
-                  <span className="font-semibold tabular-nums">
-                    <Highlight text={doc.doc_number} words={words} />
-                  </span>
-                  {day && <span className="text-muted-foreground"> · {day}</span>}
-                </p>
-                <div className="flex shrink-0 items-center gap-1.5">
+              {/* 1. The document: number, status, date */}
+              <div className="flex items-start justify-between gap-3 px-4 pt-4">
+                <div className="min-w-0 space-y-1.5">
                   <Badge variant="outline" className={cn(STATUS_STYLES[doc.status], "text-xs font-medium")}>
                     {STATUS_LABELS[doc.status]}
                   </Badge>
-                  <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                  <p className="text-lg font-bold leading-tight tracking-tight tabular-nums">
+                    <Highlight text={doc.doc_number} words={words} />
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Created on</p>
+                  <p className="flex items-center justify-end gap-1 text-sm font-medium">
+                    <CalendarDays className="size-3.5 text-muted-foreground" />
+                    {format(new Date(doc.created_at), "dd MMM yyyy")}
+                  </p>
+                </div>
+              </div>
+
+              {/* 2. The client: company, branch, address */}
+              <div className="mx-4 mt-3 flex gap-3 rounded-lg bg-muted/50 p-3">
+                <Building2 className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 space-y-1">
+                  <p className="font-semibold leading-snug">
+                    <Highlight text={company} words={words} />
+                  </p>
+                  {branch && (
+                    <Badge variant="secondary" className="w-fit gap-1 text-xs">
+                      <MapPin className="size-3" />
+                      <Highlight text={branch} words={words} />
+                    </Badge>
+                  )}
+                  {addressLines.length > 0 && (
+                    <p className="text-xs leading-relaxed whitespace-pre-line text-muted-foreground">
+                      {addressLines.join("\n")}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* 3. The work: subject, and the item that matched a search */}
+              {(doc.subject || itemHit) && (
+                <div className="space-y-2 px-4 pt-3">
+                  {doc.subject && (
+                    <div>
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Subject</p>
+                      <p className="line-clamp-2 text-sm font-medium">
+                        <Highlight text={doc.subject} words={words} />
+                      </p>
+                    </div>
+                  )}
+                  {itemHit && (
+                    <p className="rounded-lg bg-yellow-50 px-3 py-2 text-sm dark:bg-yellow-950/40">
+                      <span className="text-muted-foreground">Item: </span>
+                      <Highlight text={itemHit} words={words} />
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* 4. The money (kept at the bottom so cards side by side line up) */}
+              <div className="min-h-4 flex-1" />
+              <div className="flex items-end justify-between gap-3 border-t px-4 pt-3 pb-4">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Total amount</p>
+                  <p
+                    className={cn(
+                      "text-2xl font-bold tabular-nums text-primary",
+                      inactive && "text-muted-foreground line-through"
+                    )}
+                  >
+                    {formatIndianCurrency(doc.grand_total)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Badge variant={hasGst ? "secondary" : "outline"} className="text-xs whitespace-nowrap">
+                    {hasGst ? "Incl. 18% GST" : "No GST"}
+                  </Badge>
+                  <ChevronRight className="size-5 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                 </div>
               </div>
             </Link>
