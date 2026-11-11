@@ -185,6 +185,12 @@ function CreatePageInner() {
         // Already made into an invoice (that is not cancelled)? Do not make a second one.
         const existing = usable ? await invoicesFromQuotation(supabase, fromId) : null;
         if (loadId !== loadIdRef.current) return;
+        if (usable && existing === null) {
+          // Cannot check for an earlier invoice (setup not done), so do not risk a duplicate.
+          toast.error("Make invoice is not switched on yet, so no invoice was made.");
+          router.replace(`/document/${fromId}`);
+          return;
+        }
         if (existing && existing.active.length > 0) {
           const inv = existing.active[0];
           toast.error(`${(q as Document).doc_number} is already made into invoice ${inv.doc_number}.`);

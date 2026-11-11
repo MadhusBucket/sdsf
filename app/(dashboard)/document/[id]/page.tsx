@@ -114,7 +114,10 @@ export default async function DocumentPage({ params }: DocumentPageProps) {
                 Invoice made: {inv.doc_number}
               </Link>
             ))
-          ) : docPayload.type === "quotation" && docPayload.status !== "void" && docPayload.status !== "replaced" ? (
+          ) : docPayload.type === "quotation" &&
+            madeInvoices !== null && // links readable; without them a second invoice could not be prevented
+            docPayload.status !== "void" &&
+            docPayload.status !== "replaced" ? (
             <MakeInvoiceButton
               quotationId={docPayload.id}
               docNumber={docPayload.doc_number}
