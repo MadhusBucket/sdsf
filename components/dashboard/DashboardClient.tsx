@@ -15,13 +15,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { branchLabel, groupCompanies } from "@/lib/companies/grouping";
+import { branchLabel, companyKey, groupCompanies } from "@/lib/companies/grouping";
+import { computeLedger, type LedgerInvoice } from "@/lib/ledger/compute";
+import { fetchPayments } from "@/lib/ledger/data";
+import { allLinks } from "@/lib/convert/links";
+import type { Payment } from "@/lib/ledger/types";
 import { createClient } from "@/lib/supabase/client";
 import { getEffectiveUserId } from "@/lib/auth/sharedAccess";
 import type { DocumentType } from "@/lib/types/database";
 import { rememberListTab } from "@/components/nav/lastListTab";
 
-import { DocumentList } from "./DocumentList";
+import { DocumentList, type PaymentSummary } from "./DocumentList";
 import { DateFilter } from "./DateFilter";
 import { KPICards } from "./KPICards";
 import { fuzzyMatchesDocument, SearchBar, type DashboardDocument } from "./SearchBar";
@@ -58,6 +62,10 @@ function resolveCompanyFilter(
 export function DashboardClient({ type }: { type: DocumentType }) {
   const viewKey = `list-view-${type}`;
   const [documents, setDocuments] = useState<DashboardDocument[]>([]);
+  // Payments from the ledger (read only). null = not available, cards fall back to the invoice status.
+  const [payments, setPayments] = useState<Payment[] | null>(null);
+  // Quotation → invoice links (read only), for the "Invoice made" tag on quotations.
+  const [links, setLinks] = useState<Map<string, string[]>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilterValue>("all");
@@ -94,8 +102,13 @@ export function DashboardClient({ type }: { type: DocumentType }) {
         .eq("user_id", effectiveUserId)
         .order("created_at", { ascending: false });
 
+      const pays = type === "invoice" ? await fetchPayments(supabase, effectiveUserId) : null;
+      const linkMap = type === "quotation" ? await allLinks(supabase, effectiveUserId) : new Map<string, string[]>();
+
       if (!active) return;
       setDocuments((data as DashboardDocument[] | null) ?? []);
+      setPayments(pays);
+      setLinks(linkMap);
       setIsLoading(false);
 
       // First load: bring back the search, filters and scroll from last time.
@@ -155,6 +168,47 @@ export function DashboardClient({ type }: { type: DocumentType }) {
 
   const ofType = useMemo(() => documents.filter((doc) => doc.type === type), [documents, type]);
 
+  // What is received and pending on each invoice, worked out on screen from the payments.
+  const ledger = useMemo(() => {
+    if (type !== "invoice" || !payments) return null;
+    const keys = new Map(ofType.map((d) => [d.company_id, companyKey(d.companies?.name ?? d.company_id)]));
+    return computeLedger(ofType as LedgerInvoice[], payments, (id) => keys.get(id) ?? id);
+  }, [type, payments, ofType]);
+
+  const paymentSummaries = useMemo(() => {
+    if (!ledger) return undefined;
+    const out: Record<string, PaymentSummary> = {};
+    for (const [id, bal] of ledger.invoices) out[id] = { received: Math.max(0, bal.total - bal.pending) };
+    return out;
+  }, [ledger]);
+
+  const madeInto = useMemo(() => {
+    if (type !== "quotation" || links.size === 0) return undefined;
+    const byId = new Map(documents.map((d) => [d.id, d]));
+    const out: Record<string, string[]> = {};
+    for (const [quotationId, invoiceIds] of links) {
+      const numbers = invoiceIds
+        .map((id) => byId.get(id))
+        .filter((d) => d && d.status !== "void" && d.status !== "replaced")
+        .map((d) => d!.doc_number);
+      if (numbers.length) out[quotationId] = numbers;
+    }
+    return out;
+  }, [type, links, documents]);
+
+  const pendingFromLedger = useMemo(() => {
+    if (!ledger) return undefined;
+    let amount = 0;
+    let count = 0;
+    for (const bal of ledger.invoices.values()) {
+      if (bal.pending > 0) {
+        amount += bal.pending;
+        count += 1;
+      }
+    }
+    return { amount, count };
+  }, [ledger]);
+
   // Companies (grouped with their branches) that have documents of this type, with how many.
   const companyGroups = useMemo(() => {
     const branches = new Map<string, { id: string; name: string; branch: string | null; address: string | null; count: number }>();
@@ -201,7 +255,7 @@ export function DashboardClient({ type }: { type: DocumentType }) {
       <div className="space-y-4 p-4 pb-28 sm:p-6">
         {/* Dashboard */}
         <h1 className="font-heading text-2xl font-bold tracking-tight">Dashboard</h1>
-        <KPICards documents={documents} type={type} />
+        <KPICards documents={documents} type={type} pending={pendingFromLedger} />
 
         {/* Divider between the dashboard and the list */}
         <div className="pt-4">
@@ -283,7 +337,7 @@ export function DashboardClient({ type }: { type: DocumentType }) {
             Loading documents...
           </div>
         ) : (
-          <DocumentList documents={filteredDocuments} documentType={type} query={query} />
+          <DocumentList documents={filteredDocuments} documentType={type} query={query} payments={paymentSummaries} madeInto={madeInto} />
         )}
       </div>
 

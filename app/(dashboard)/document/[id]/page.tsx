@@ -1,7 +1,10 @@
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import { CheckCircle2, ChevronLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 
+import { MakeInvoiceButton } from "@/components/document/MakeInvoiceButton";
+import { invoicesFromQuotation, quotationForInvoice } from "@/lib/convert/links";
+import { InvoicePayments } from "@/components/ledger/InvoicePayments";
 import { DocumentPdfToolbar } from "@/components/pdf/DocumentPdfToolbar";
 import { PDFPreview } from "@/components/pdf/PDFPreview";
 import { Badge } from "@/components/ui/badge";
@@ -63,6 +66,10 @@ export default async function DocumentPage({ params }: DocumentPageProps) {
   const { companies: _companies, ...document } = row;
   const docPayload = document as Document;
 
+  // Quotation → invoice links (read only). Null/empty if not set up yet.
+  const madeInvoices = docPayload.type === "quotation" ? await invoicesFromQuotation(supabase, docPayload.id) : null;
+  const madeFrom = docPayload.type === "invoice" ? await quotationForInvoice(supabase, docPayload.id) : null;
+
   return (
     <div className="space-y-5 p-4 pb-10 sm:p-6">
       <Link
@@ -84,13 +91,40 @@ export default async function DocumentPage({ params }: DocumentPageProps) {
           </span>
           <div className="min-w-0">
             <h1 className="font-heading text-2xl font-bold tracking-tight tabular-nums">{docPayload.doc_number}</h1>
+            {madeFrom && (
+              <Link href={`/document/${madeFrom.id}`} className="text-sm font-medium text-primary underline-offset-4 hover:underline">
+                Made from quotation {madeFrom.doc_number}
+              </Link>
+            )}
             <p className="text-sm text-zinc-500">
               {company.name}
               {company.branch ? ` · ${company.branch}` : ""}
             </p>
           </div>
         </div>
-        <DocumentPdfToolbar document={docPayload} />
+        <div className="flex flex-wrap items-center gap-2">
+          {docPayload.type === "quotation" && madeInvoices && madeInvoices.active.length > 0 ? (
+            madeInvoices.active.map((inv) => (
+              <Link
+                key={inv.id}
+                href={`/document/${inv.id}`}
+                className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-50 px-4 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200 hover:bg-emerald-100"
+              >
+                <CheckCircle2 className="size-5" />
+                Invoice made: {inv.doc_number}
+              </Link>
+            ))
+          ) : docPayload.type === "quotation" && docPayload.status !== "void" && docPayload.status !== "replaced" ? (
+            <MakeInvoiceButton
+              quotationId={docPayload.id}
+              docNumber={docPayload.doc_number}
+              companyId={docPayload.company_id}
+              grandTotal={Number(docPayload.grand_total)}
+              cancelledInvoices={madeInvoices?.cancelled.map((c) => c.doc_number) ?? []}
+            />
+          ) : null}
+          <DocumentPdfToolbar document={docPayload} />
+        </div>
       </div>
 
       <Card size="sm">
@@ -148,6 +182,8 @@ export default async function DocumentPage({ params }: DocumentPageProps) {
           ) : null}
         </CardContent>
       </Card>
+
+      {docPayload.type === "invoice" && <InvoicePayments invoiceId={docPayload.id} companyId={company.id} />}
 
       <div className="overflow-hidden rounded-[24px] border border-black/[0.06] bg-white shadow-[0_1px_3px_rgba(16,24,40,0.04)] dark:border-white/10">
         <PDFPreview documentId={docPayload.id} />

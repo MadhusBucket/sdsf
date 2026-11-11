@@ -23,6 +23,7 @@ import { CompanySelector } from "@/components/creation/CompanySelector";
 import { ItemCard } from "@/components/creation/ItemCard";
 import { StickyFooter } from "@/components/creation/StickyFooter";
 import { createClient } from "@/lib/supabase/client";
+import { invoicesFromQuotation, saveLink } from "@/lib/convert/links";
 import { getEffectiveUserId } from "@/lib/auth/sharedAccess";
 import { useDocumentStore } from "@/lib/stores/documentStore";
 import type { Document, DocumentType } from "@/lib/types/database";
@@ -48,10 +49,46 @@ function captureWorkspaceSignature(): string {
   });
 }
 
+/**
+ * After an invoice made from a quotation is saved for the first time (it gets an id),
+ * note which quotation it came from. Only adds a row to quotation_invoices.
+ * Kept outside the page so it still happens if the page is left right after.
+ */
+function rememberWhenSaved(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  quotationId: string,
+  invoiceNumber: string
+) {
+  const stop = useDocumentStore.subscribe((state) => {
+    const d = state.draft;
+    if (!d.id || d.type !== "invoice" || d.number !== invoiceNumber) return;
+    stop();
+    void (async () => {
+      const { error } = await saveLink(supabase, { userId, quotationId, invoiceId: d.id! });
+      if (error) {
+        console.error("quotation link", error.message);
+        return;
+      }
+      // Two devices converting at the same moment: say so, so one can be cancelled.
+      const after = await invoicesFromQuotation(supabase, quotationId);
+      if (after && after.active.length > 1) {
+        toast.warning(
+          `This quotation now has ${after.active.length} invoices: ${after.active.map((i) => i.doc_number).join(", ")}. Cancel the extra one.`
+        );
+      }
+    })();
+  });
+  // Give up after 10 minutes if it was never saved (no company chosen, page closed).
+  setTimeout(stop, 10 * 60 * 1000);
+}
+
 function CreatePageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams.get("id");
+  // "Make invoice" on a quotation: start a NEW invoice filled from that quotation.
+  const fromId = editId ? null : searchParams.get("from");
   const typeParam = (searchParams.get("type") ?? "quotation") as DocumentType;
 
   const loadIdRef = useRef(0);
@@ -127,6 +164,66 @@ function CreatePageInner() {
           initializeDraft(typeParam);
           toast.error("Document not found");
           snapshotPristine();
+        }
+        return;
+      }
+
+      if (fromId) {
+        // The quotation is only read here; it is never saved over. The new invoice has no id,
+        // so saving always creates a new row.
+        const { data: q, error: qError } = await supabase
+          .from("documents")
+          .select("*")
+          .eq("id", fromId)
+          .eq("user_id", effectiveUserId)
+          .eq("type", "quotation")
+          .single();
+
+        if (loadId !== loadIdRef.current) return;
+
+        const usable = q && !qError && q.status !== "void" && q.status !== "replaced";
+        // Already made into an invoice (that is not cancelled)? Do not make a second one.
+        const existing = usable ? await invoicesFromQuotation(supabase, fromId) : null;
+        if (loadId !== loadIdRef.current) return;
+        if (existing && existing.active.length > 0) {
+          const inv = existing.active[0];
+          toast.error(`${(q as Document).doc_number} is already made into invoice ${inv.doc_number}.`);
+          router.replace(`/document/${inv.id}`);
+          return;
+        }
+
+        if (usable) {
+          const quotation = q as Document;
+          // Company is set only after the invoice number is ready: the draft auto-saves once a
+          // company is chosen, and it must never save with a placeholder number.
+          setDraft({
+            ...quotation,
+            id: null as unknown as string,
+            type: "invoice",
+            doc_number: `${docPrefixForType("invoice")}/${getCurrentFY()}/000`,
+            date: new Date().toISOString().slice(0, 10),
+            po_number: null,
+            company_id: null as unknown as string,
+            status: "draft",
+            replaced_by: null,
+          });
+          const { draft: d } = useDocumentStore.getState();
+          const max = await fetchMaxDocumentSerial(supabase, effectiveUserId, d.type, d.financial_year);
+          if (loadId !== loadIdRef.current) return;
+          applyDocumentSequence(max);
+          rememberWhenSaved(supabase, effectiveUserId, quotation.id, useDocumentStore.getState().draft.number);
+          setCompanyId(quotation.company_id);
+          toast.message(`New invoice from ${quotation.doc_number}. Check it, change anything you need, then save.`);
+          snapshotPristine();
+          return;
+        }
+        // Cancelled, replaced or not a quotation: do not open a blank invoice by surprise.
+        if (q && !qError) {
+          toast.error("This quotation is cancelled or replaced, so no invoice was made.");
+          router.replace(`/document/${fromId}`);
+        } else {
+          toast.error("Quotation not found, so no invoice was made.");
+          router.replace("/quotations");
         }
         return;
       }

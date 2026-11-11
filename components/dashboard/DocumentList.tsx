@@ -103,7 +103,12 @@ export function DocumentList({
   documentType,
   query = "",
   payments,
-}: DocumentListProps & { payments?: Record<string, PaymentSummary> }) {
+  madeInto,
+}: DocumentListProps & {
+  payments?: Record<string, PaymentSummary>;
+  /** Quotation id → invoice numbers made from it (not cancelled). */
+  madeInto?: Record<string, string[]>;
+}) {
   const words = searchWords(query);
   if (documents.length === 0) {
     return (
@@ -260,8 +265,13 @@ export function DocumentList({
                 </div>
               )}
               {!showPayment && (
-                <div className="mt-3 flex justify-end">
-                  <ChevronRight className="size-5 text-zinc-400 transition-transform group-hover:translate-x-0.5" />
+                <div className="mt-3 flex items-center gap-2">
+                  {madeInto?.[doc.id]?.length ? (
+                    <Chip icon={<Check className="size-3.5 text-[#5c8a12]" />}>
+                      Invoice made · {madeInto[doc.id].join(", ")}
+                    </Chip>
+                  ) : null}
+                  <ChevronRight className="ml-auto size-5 text-zinc-400 transition-transform group-hover:translate-x-0.5" />
                 </div>
               )}
             </Link>

@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, FileText, ScrollText } from "lucide-react";
+import { BookOpenText, Building2, FileText, ScrollText } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 const ITEMS = [
   { href: "/invoices", label: "Invoices", icon: FileText },
   { href: "/quotations", label: "Quotations", icon: ScrollText },
+  { href: "/ledger", label: "Ledger", icon: BookOpenText },
   { href: "/companies", label: "Companies", icon: Building2 },
 ] as const;
 
@@ -26,7 +27,7 @@ export function BottomNav() {
       aria-label="Main"
       className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
     >
-      <div className="mx-auto grid max-w-5xl grid-cols-3">
+      <div className="mx-auto grid max-w-5xl grid-cols-4">
         {ITEMS.map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href);
           return (

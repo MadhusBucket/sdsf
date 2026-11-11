@@ -11,6 +11,8 @@ import type { DashboardDocument } from "./SearchBar";
 interface KPICardsProps {
   documents: DashboardDocument[];
   type: DocumentType;
+  /** Pending worked out from recorded payments. Without it, invoices not marked Paid are counted. */
+  pending?: { amount: number; count: number };
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -51,7 +53,7 @@ function niceStep(max: number) {
  * what is still pending (invoices), and a 12-month line graph.
  * Cancelled and replaced documents are never counted.
  */
-export function KPICards({ documents, type }: KPICardsProps) {
+export function KPICards({ documents, type, pending }: KPICardsProps) {
   const isInvoice = type === "invoice";
   const word = isInvoice ? "invoice" : "quotation";
 
@@ -128,10 +130,12 @@ export function KPICards({ documents, type }: KPICardsProps) {
           <div className="sm:border-l sm:border-black/[0.06] sm:pl-5 dark:sm:border-white/10">
             <p className="text-sm text-zinc-500">Pending</p>
             <p className="font-heading text-[30px] leading-tight font-bold tracking-tight tabular-nums text-amber-600">
-              {rupees(s.pending)}
+              {rupees(pending ? pending.amount : s.pending)}
             </p>
             <p className="mt-1 text-sm text-zinc-500">
-              {s.pendingCount} {s.pendingCount === 1 ? "invoice" : "invoices"} not marked paid
+              {pending
+                ? `${pending.count} ${pending.count === 1 ? "invoice" : "invoices"} with money to collect`
+                : `${s.pendingCount} ${s.pendingCount === 1 ? "invoice" : "invoices"} not marked paid`}
             </p>
           </div>
         )}

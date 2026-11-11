@@ -171,7 +171,14 @@ export default function CompaniesPage() {
         .from("companies")
         .delete()
         .eq("id", deleteTarget.company.id);
-      if (error) { toast.error(error.message); return; }
+      if (error) {
+        toast.error(
+          error.code === "23503"
+            ? "This company has payments recorded in the Ledger, so it cannot be deleted."
+            : error.message
+        );
+        return;
+      }
       setCompanies((prev) => prev.filter((c) => c.id !== deleteTarget.company.id));
       setDeleteTarget(null);
       toast.success("Company deleted");

@@ -51,5 +51,6 @@ export const config = {
     "/document/:path*",
     "/invoice/:path*",
     "/export/:path*",
+    "/ledger/:path*",
   ],
 };
