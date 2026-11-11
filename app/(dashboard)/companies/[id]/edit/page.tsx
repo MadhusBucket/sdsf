@@ -94,18 +94,17 @@ export default function EditCompanyPage() {
   if (!company) return null;
 
   return (
-    <main className="mx-auto max-w-lg space-y-6 px-4 py-6">
-      <div className="flex items-center gap-3">
-        <Button asChild variant="ghost" className="h-11">
-          <Link href="/companies">
-            <ChevronLeft className="mr-1 h-4 w-4" />
-            Back
-          </Link>
-        </Button>
-        <h1 className="text-lg font-semibold">Edit Company</h1>
-      </div>
+    <main className="mx-auto max-w-lg space-y-5 p-4 pb-10 sm:p-6">
+      <Link
+        href="/companies"
+        className="inline-flex min-h-11 items-center gap-1 rounded-full border border-black/10 bg-white pr-4 pl-2 text-sm font-medium hover:bg-zinc-50 dark:border-white/10 dark:bg-card"
+      >
+        <ChevronLeft className="size-5" />
+        Back
+      </Link>
+      <h1 className="font-heading text-2xl font-bold tracking-tight">Edit company</h1>
 
-      <div className="space-y-4">
+      <div className="space-y-4 rounded-[24px] border border-black/[0.06] bg-white p-5 shadow-[0_1px_3px_rgba(16,24,40,0.04)] sm:p-6 dark:border-white/10 dark:bg-card">
         <div className="space-y-1">
           <Label htmlFor="edit-name">Company name</Label>
           <Input
@@ -154,7 +153,7 @@ export default function EditCompanyPage() {
       </div>
 
       <div className="flex gap-3">
-        <Button asChild variant="outline" className="h-11 flex-1" disabled={isSaving}>
+        <Button asChild variant="outline" className="h-12 flex-1 bg-white" disabled={isSaving}>
           <Link href="/companies">Cancel</Link>
         </Button>
         <Button

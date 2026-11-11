@@ -185,7 +185,7 @@ export function DocumentList({
                         <span aria-hidden className="text-zinc-300">•</span>
                       </>
                     )}
-                    <span className="font-bold tabular-nums text-zinc-900 dark:text-zinc-50">
+                    <span className="font-semibold tabular-nums text-zinc-500 dark:text-zinc-400">
                       <Highlight text={doc.doc_number} words={words} />
                     </span>
                   </p>

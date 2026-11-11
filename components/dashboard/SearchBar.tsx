@@ -26,7 +26,7 @@ export function SearchBar({ query, onChange }: SearchBarProps) {
         value={query}
         onChange={(event) => onChange(event.target.value)}
         placeholder="Search company, number or item (e.g. steel sheet)"
-        className="pl-9 text-base"
+        className="h-11 rounded-xl border-gray-300 bg-white pl-9 text-base"
         inputMode="search"
       />
     </div>

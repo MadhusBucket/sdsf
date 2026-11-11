@@ -219,29 +219,14 @@ export function DashboardClient({ type }: { type: DocumentType }) {
           </Button>
         </div>
 
-        <SearchBar query={query} onChange={setQuery} />
-
-
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-          <p className="text-sm text-muted-foreground">
-            {plural}{" "}
-            <span className="font-medium text-foreground">{filteredDocuments.length}</span>
-            {companyFilter && (
-              <>
-                {" "}for <span className="font-medium text-foreground">{companyFilter.label}</span>{" "}
-                <button
-                  type="button"
-                  onClick={() => setCompany(ALL_COMPANIES)}
-                  className="ml-1 text-primary underline underline-offset-4"
-                >
-                  Show all
-                </button>
-              </>
-            )}
-          </p>
-          <div className="flex w-full min-w-0 items-center gap-2 sm:ml-auto sm:w-auto">
+        {/* One row: search (half) | company | status | date */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="min-w-0 sm:w-1/2">
+            <SearchBar query={query} onChange={setQuery} />
+          </div>
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <Select value={company} onValueChange={setCompany}>
-              <SelectTrigger className="h-11 min-w-0 flex-1 gap-2 border-gray-300 bg-white sm:w-56 sm:flex-none [&>svg]:shrink-0 [&>[data-slot=select-value]]:min-w-0 [&>[data-slot=select-value]]:flex-1 [&>[data-slot=select-value]]:overflow-hidden" aria-label="Filter by company">
+              <SelectTrigger className="h-11 min-w-0 flex-1 gap-2 rounded-xl border-gray-300 bg-white [&>svg]:shrink-0 [&>[data-slot=select-value]]:min-w-0 [&>[data-slot=select-value]]:flex-1 [&>[data-slot=select-value]]:overflow-hidden" aria-label="Filter by company">
                 <SelectValue placeholder="All companies">
                   <span className="block truncate text-left">{companyFilter ? companyFilter.label : "All companies"}</span>
                 </SelectValue>
@@ -269,10 +254,29 @@ export function DashboardClient({ type }: { type: DocumentType }) {
                 )}
               </SelectContent>
             </Select>
-            <StatusFilter value={status} onChange={setStatus} />
+            <div className="min-w-0 flex-1">
+              <StatusFilter value={status} onChange={setStatus} />
+            </div>
             <DateFilter selectedDate={dateFilter} onDateChange={setDateFilter} />
           </div>
         </div>
+
+        <p className="-mt-1 text-sm text-muted-foreground">
+          {plural}{" "}
+          <span className="font-medium text-foreground">{filteredDocuments.length}</span>
+          {companyFilter && (
+            <>
+              {" "}for <span className="font-medium text-foreground">{companyFilter.label}</span>{" "}
+              <button
+                type="button"
+                onClick={() => setCompany(ALL_COMPANIES)}
+                className="ml-1 text-primary underline underline-offset-4"
+              >
+                Show all
+              </button>
+            </>
+          )}
+        </p>
 
         {isLoading && documents.length === 0 ? (
           <div className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">

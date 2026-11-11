@@ -27,7 +27,8 @@ export function DateFilter({ selectedDate, onDateChange }: DateFilterProps) {
           type="button"
           variant="outline"
           size="icon"
-          className={`h-11 w-11 border-gray-300 bg-white${selectedDate ? " border-blue-400 text-blue-600" : ""}`}
+          aria-label={selectedDate ? `Date: ${format(selectedDate, "dd MMM yyyy")}` : "Filter by date"}
+          className={`size-11 shrink-0 rounded-xl border-gray-300 bg-white${selectedDate ? " border-blue-400 text-blue-600" : ""}`}
         >
           <CalendarIcon className="h-4 w-4 shrink-0" />
           <span className="sr-only">

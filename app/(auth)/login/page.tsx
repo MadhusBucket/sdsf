@@ -15,7 +15,7 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <main className="flex min-h-screen items-center justify-center bg-muted/30" />
+        <main className="flex min-h-screen items-center justify-center bg-[#f4f5f5] dark:bg-background" />
       }
     >
       <LoginForm />
@@ -42,10 +42,10 @@ function LoginForm() {
           : null;
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10">
-      <section className="w-full max-w-md rounded-2xl border bg-background p-6 shadow-sm sm:p-8">
+    <main className="flex min-h-screen items-center justify-center bg-[#f4f5f5] px-4 py-10 dark:bg-background">
+      <section className="w-full max-w-md rounded-[24px] border border-black/[0.06] bg-white shadow-[0_1px_3px_rgba(16,24,40,0.04)] dark:border-white/10 dark:bg-card p-6 sm:p-8">
         <div className="mb-6 space-y-2 text-center sm:mb-8">
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <h1 className="font-heading text-2xl font-bold tracking-tight">
             Welcome back, Pradeep
           </h1>
           <p className="text-sm text-muted-foreground">

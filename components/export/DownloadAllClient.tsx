@@ -121,19 +121,20 @@ export function DownloadAllClient() {
     <div className="space-y-6">
       <Link
         href="/dashboard"
-        className="inline-flex min-h-11 items-center gap-1 rounded-full border bg-card pr-4 pl-2 font-medium hover:bg-muted"
+        className="inline-flex min-h-11 items-center gap-1 rounded-full border border-black/10 bg-white pr-4 pl-2 text-sm font-medium hover:bg-zinc-50 dark:border-white/10 dark:bg-card"
       >
         <ChevronLeft className="size-5" />
         Back
       </Link>
 
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Download all</h1>
+        <h1 className="font-heading text-2xl font-bold tracking-tight">Download all</h1>
         <p className="text-muted-foreground">
           Get many invoices and quotations as one PDF file. Nothing is changed.
         </p>
       </div>
 
+      <div className="space-y-6 rounded-[24px] border border-black/[0.06] bg-white shadow-[0_1px_3px_rgba(16,24,40,0.04)] dark:border-white/10 dark:bg-card p-5 sm:p-6">
       <Group title="What to include">
         <Chip on={kind === "both"} onClick={() => change(setKind)("both")}>Invoices and quotations</Chip>
         <Chip on={kind === "invoice"} onClick={() => change(setKind)("invoice")}>Invoices only</Chip>
@@ -154,7 +155,7 @@ export function DownloadAllClient() {
               type="date"
               value={customFrom}
               onChange={(e) => change(setCustomFrom)(e.target.value)}
-              className="h-12 rounded-lg border border-input bg-background px-3 text-base"
+              className="h-12 rounded-xl border border-input bg-white px-3 text-base dark:bg-background"
             />
           </label>
           <label className="grid gap-1.5 font-medium">
@@ -163,7 +164,7 @@ export function DownloadAllClient() {
               type="date"
               value={customTo}
               onChange={(e) => change(setCustomTo)(e.target.value)}
-              className="h-12 rounded-lg border border-input bg-background px-3 text-base"
+              className="h-12 rounded-xl border border-input bg-white px-3 text-base dark:bg-background"
             />
           </label>
         </div>
@@ -177,7 +178,7 @@ export function DownloadAllClient() {
           id="export-company"
           value={companyId}
           onChange={(e) => change(setCompanyId)(e.target.value)}
-          className="h-12 rounded-lg border border-input bg-background px-3 text-base"
+          className="h-12 rounded-xl border border-input bg-white px-3 text-base dark:bg-background"
         >
           <option value="">All companies</option>
           {companies.map((c) => (
@@ -188,7 +189,7 @@ export function DownloadAllClient() {
         </select>
       </div>
 
-      <label className="flex max-w-md cursor-pointer items-start gap-3 rounded-lg border bg-card p-3">
+      <label className="flex max-w-md cursor-pointer items-start gap-3 rounded-xl border bg-white p-3 dark:bg-background">
         <input
           type="checkbox"
           className="mt-1 size-5"
@@ -200,8 +201,9 @@ export function DownloadAllClient() {
           <span className="block text-sm text-muted-foreground">Leave this off for a normal download.</span>
         </span>
       </label>
+      </div>
 
-      <section className="space-y-4 rounded-lg border bg-card p-4">
+      <section className="space-y-4 rounded-[24px] border border-black/[0.06] bg-white shadow-[0_1px_3px_rgba(16,24,40,0.04)] dark:border-white/10 dark:bg-card p-5 sm:p-6">
         <div className="flex items-start gap-3">
           <FileStack className="mt-0.5 size-6 shrink-0 text-primary" />
           {rows === null ? (
@@ -259,7 +261,7 @@ export function DownloadAllClient() {
             src={src}
             title="Preview of all documents"
             onLoad={() => setReady(true)}
-            className={cn("h-[70vh] w-full rounded-lg border bg-white", !ready && "opacity-50")}
+            className={cn("h-[70vh] w-full rounded-[24px] border border-black/[0.06] bg-white", !ready && "opacity-50")}
           />
         </div>
       )}

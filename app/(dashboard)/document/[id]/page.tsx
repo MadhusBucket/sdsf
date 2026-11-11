@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 
 import { DocumentPdfToolbar } from "@/components/pdf/DocumentPdfToolbar";
@@ -15,6 +16,7 @@ import { createClient, getEffectiveUser } from "@/lib/supabase/server";
 import type { Company, Document } from "@/lib/types/database";
 import { formatIndianCurrency } from "@/lib/utils/formatting";
 import { cn } from "@/lib/utils";
+import { companyColor, companyInitials } from "@/lib/companies/colors";
 
 const STATUS_STYLES: Record<Document["status"], string> = {
   draft: "bg-zinc-100 text-zinc-700 border-zinc-200",
@@ -62,17 +64,31 @@ export default async function DocumentPage({ params }: DocumentPageProps) {
   const docPayload = document as Document;
 
   return (
-    <div className="space-y-6 px-4 py-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <Link
-            className="text-sm text-muted-foreground underline-offset-4 hover:underline"
-            href="/dashboard"
+    <div className="space-y-5 p-4 pb-10 sm:p-6">
+      <Link
+        href="/dashboard"
+        className="inline-flex min-h-11 items-center gap-1 rounded-full border border-black/10 bg-white pr-4 pl-2 text-sm font-medium hover:bg-zinc-50 dark:border-white/10 dark:bg-card"
+      >
+        <ChevronLeft className="size-5" />
+        Back
+      </Link>
+
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3.5">
+          <span
+            className="grid size-12 shrink-0 place-items-center rounded-full text-base font-bold"
+            style={{ backgroundColor: companyColor(company.name).soft, color: companyColor(company.name).text }}
+            aria-hidden
           >
-            ← Back to dashboard
-          </Link>
-          <h2 className="mt-2 text-lg font-semibold tracking-tight">{docPayload.doc_number}</h2>
-          <p className="text-sm text-muted-foreground">{company.name}</p>
+            {companyInitials(company.name)}
+          </span>
+          <div className="min-w-0">
+            <h1 className="font-heading text-2xl font-bold tracking-tight tabular-nums">{docPayload.doc_number}</h1>
+            <p className="text-sm text-zinc-500">
+              {company.name}
+              {company.branch ? ` · ${company.branch}` : ""}
+            </p>
+          </div>
         </div>
         <DocumentPdfToolbar document={docPayload} />
       </div>
@@ -97,7 +113,7 @@ export default async function DocumentPage({ params }: DocumentPageProps) {
             <p className="text-xs font-medium uppercase text-muted-foreground">Company</p>
             <p className="text-sm font-medium">{company.name}</p>
             {company.address && (
-              <p className="text-sm text-muted-foreground mt-1">{company.address}</p>
+              <p className="mt-1 text-sm whitespace-pre-line text-muted-foreground">{company.address}</p>
             )}
           </div>
           <div>
@@ -133,7 +149,9 @@ export default async function DocumentPage({ params }: DocumentPageProps) {
         </CardContent>
       </Card>
 
-      <PDFPreview documentId={docPayload.id} />
+      <div className="overflow-hidden rounded-[24px] border border-black/[0.06] bg-white shadow-[0_1px_3px_rgba(16,24,40,0.04)] dark:border-white/10">
+        <PDFPreview documentId={docPayload.id} />
+      </div>
     </div>
   );
 }

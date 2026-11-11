@@ -35,9 +35,9 @@ const STATUS_LABELS: Record<DocumentStatus, string> = {
 export function StatusFilter({ value, onChange }: StatusFilterProps) {
   return (
     <Select value={value} onValueChange={(next) => onChange(next as StatusFilterValue)}>
-      <SelectTrigger className="h-11 w-36 gap-1.5 border-gray-300 bg-white">
+      <SelectTrigger className="h-11 w-full min-w-0 gap-1.5 rounded-xl border-gray-300 bg-white" aria-label="Filter by status">
         {value === "all" ? (
-          <span>All</span>
+          <span className="truncate">All statuses</span>
         ) : (
           <Badge variant="outline" className={STATUS_BADGE_CLASS[value as DocumentStatus]}>
             {STATUS_LABELS[value as DocumentStatus]}
