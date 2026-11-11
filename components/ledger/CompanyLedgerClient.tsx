@@ -9,7 +9,6 @@ import { branchLabel, companyKey, groupCompanies } from "@/lib/companies/groupin
 import { companyColor, companyInitials } from "@/lib/companies/colors";
 import {
   companyEntries,
-  daysSince,
   formatDay,
   isActiveInvoice,
   paymentCompanyId,
@@ -21,7 +20,8 @@ import {
 import type { Payment } from "@/lib/ledger/types";
 import { cn } from "@/lib/utils";
 
-import { MoneyCards, PeriodChips, Pill, RemovePaymentDialog, payState } from "./LedgerBits";
+import { BillsSection, billStatus, type BillRow } from "./BillsSection";
+import { MoneyCards, PeriodChips, RemovePaymentDialog } from "./LedgerBits";
 import { RecordPaymentDialog, type PaymentStart } from "./RecordPaymentDialog";
 import { useLedger } from "./useLedger";
 
@@ -29,7 +29,13 @@ const cardClass =
   "rounded-[24px] bg-white p-5 ring-1 ring-black/[0.06] shadow-[0_1px_3px_rgba(16,24,40,0.04)] dark:bg-card dark:ring-white/10";
 
 /** One company (all its branches): unpaid bills, and every bill and payment with a running balance. */
-export function CompanyLedgerClient({ companyId }: { companyId: string }) {
+export function CompanyLedgerClient({
+  companyId,
+  business,
+}: {
+  companyId: string;
+  business: { name: string; address: string; gstin: string; phone: string };
+}) {
   const { data, ledger, failed, reload } = useLedger();
   const [period, setPeriod] = useState<Period>("fy");
   const [start, setStart] = useState<PaymentStart | null>(null);
@@ -54,6 +60,10 @@ export function CompanyLedgerClient({ companyId }: { companyId: string }) {
     () => (view && !view.missing ? companyEntries(view.invoices, view.payments, period) : null),
     [view, period]
   );
+  const fullStatement = useMemo(
+    () => (view && !view.missing ? companyEntries(view.invoices, view.payments, "all") : null),
+    [view]
+  );
 
   if (failed) {
     return <div className="rounded-[24px] bg-amber-50 p-5 text-amber-900 ring-1 ring-amber-200">The ledger could not load. Check your internet and refresh.</div>;
@@ -61,7 +71,7 @@ export function CompanyLedgerClient({ companyId }: { companyId: string }) {
   if (!data || !ledger || !view) {
     return <div className={cn(cardClass, "text-center text-zinc-500")}>Loading…</div>;
   }
-  if (view.missing || !entries) {
+  if (view.missing || !entries || !fullStatement) {
     return <div className={cn(cardClass, "text-center text-zinc-500")}>Company not found.</div>;
   }
 
@@ -72,11 +82,17 @@ export function CompanyLedgerClient({ companyId }: { companyId: string }) {
     return many && b ? branchLabel(b) : "";
   };
   const s = ledger.companies.get(key) ?? { billed: 0, received: 0, writtenOff: 0, pending: 0, extra: 0, billCount: 0, oldestUnpaidDate: null, lastActivity: null };
-  const unpaid = view.invoices
+  const billRows: BillRow[] = view.invoices
     .filter(isActiveInvoice)
     .map((inv) => ({ inv, bal: ledger.invoices.get(inv.id) }))
-    .filter((x): x is { inv: typeof x.inv; bal: NonNullable<typeof x.bal> } => !!x.bal && x.bal.pending > 0)
-    .sort((a, b) => a.inv.date.localeCompare(b.inv.date));
+    .filter((x): x is { inv: typeof x.inv; bal: NonNullable<typeof x.bal> } => !!x.bal)
+    .map(({ inv, bal }) => {
+      const b = branches.find((x) => x.id === inv.company_id);
+      return { inv, bal, branch: b ? branchLabel(b) : "", status: billStatus(bal) };
+    });
+  const companyDetail = many
+    ? `${branches.length} branches`
+    : [anchor.branch, anchor.gstin ? `GSTIN ${anchor.gstin}` : null].filter(Boolean).join(" · ");
   const paymentById = new Map(view.payments.map((p) => [p.id, p]));
   const color = companyColor(name);
 
@@ -130,42 +146,17 @@ export function CompanyLedgerClient({ companyId }: { companyId: string }) {
         </p>
       )}
 
-      <section className={cn(cardClass, "space-y-3")}>
-        <h2 className="font-heading text-xl font-bold">Unpaid bills</h2>
-        {unpaid.length === 0 ? (
-          <p className="text-zinc-500">Nothing pending. All bills are paid.</p>
-        ) : (
-          <ul className="divide-y divide-dashed divide-black/10 dark:divide-white/10">
-            {unpaid.map(({ inv, bal }) => (
-              <li key={inv.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                <Link href={`/document/${inv.id}`} className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold tabular-nums underline-offset-4 hover:underline">{inv.doc_number}</span>
-                    <Pill {...payState(bal)} />
-                  </div>
-                  <p className="text-sm text-zinc-500">
-                    {[formatDay(inv.date), `${daysSince(inv.date)} days ago`, branchOf(inv.company_id), inv.subject].filter(Boolean).join(" · ")}
-                  </p>
-                  <p className="text-sm tabular-nums">
-                    Total {rupees(bal.total)}
-                    {bal.received > 0 && <> · Received {rupees(bal.received)}</>} ·{" "}
-                    <b className="text-red-700 dark:text-red-400">Pending {rupees(bal.pending)}</b>
-                  </p>
-                </Link>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-11 rounded-xl"
-                  disabled={!data.paymentsReady}
-                  onClick={() => setStart({ groupKey: key, invoiceId: inv.id })}
-                >
-                  Record payment
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <BillsSection
+        rows={billRows}
+        payments={view.payments}
+        paymentsReady={data.paymentsReady}
+        companyName={name}
+        companyDetail={companyDetail}
+        business={business}
+        statement={fullStatement}
+        onRecord={(invoiceId) => setStart({ groupKey: key, invoiceId })}
+        onRemove={setRemoving}
+      />
 
       <section className={cn(cardClass, "space-y-3")}>
         <div className="flex flex-wrap items-center justify-between gap-3">

@@ -27,7 +27,7 @@ import { rememberListTab } from "@/components/nav/lastListTab";
 
 import { DocumentList, type PaymentSummary } from "./DocumentList";
 import { DateFilter } from "./DateFilter";
-import { KPICards } from "./KPICards";
+import { KPICards, type DashPeriod } from "./KPICards";
 import { fuzzyMatchesDocument, SearchBar, type DashboardDocument } from "./SearchBar";
 import { StatusFilter, type StatusFilterValue } from "./StatusFilter";
 
@@ -66,6 +66,15 @@ export function DashboardClient({ type }: { type: DocumentType }) {
   const [payments, setPayments] = useState<Payment[] | null>(null);
   // Quotation → invoice links (read only), for the "Invoice made" tag on quotations.
   const [links, setLinks] = useState<Map<string, string[]>>(new Map());
+  // Period for the dashboard numbers, remembered for this browser tab.
+  const periodKey = `dash-period-${type}`;
+  const [period, setPeriodState] = useState<DashPeriod>("month");
+  const setPeriod = (p: DashPeriod) => {
+    setPeriodState(p);
+    try {
+      sessionStorage.setItem(periodKey, p);
+    } catch {}
+  };
   const [isLoading, setIsLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilterValue>("all");
@@ -117,6 +126,10 @@ export function DashboardClient({ type }: { type: DocumentType }) {
         let saved: Partial<SavedView> | null = null;
         try {
           saved = JSON.parse(sessionStorage.getItem(viewKey) ?? "null");
+        } catch {}
+        try {
+          const v = sessionStorage.getItem(`dash-period-${type}`);
+          if (v === "today" || v === "week" || v === "month" || v === "year") setPeriodState(v);
         } catch {}
         if (saved) {
           setQuery(saved.query ?? "");
@@ -255,7 +268,15 @@ export function DashboardClient({ type }: { type: DocumentType }) {
       <div className="space-y-4 p-4 pb-28 sm:p-6">
         {/* Dashboard */}
         <h1 className="font-heading text-2xl font-bold tracking-tight">Dashboard</h1>
-        <KPICards documents={documents} type={type} pending={pendingFromLedger} />
+        <KPICards
+          documents={documents}
+          type={type}
+          pending={pendingFromLedger}
+          payments={payments}
+          madeInto={madeInto}
+          period={period}
+          onPeriodChange={setPeriod}
+        />
 
         {/* Divider between the dashboard and the list */}
         <div className="pt-4">

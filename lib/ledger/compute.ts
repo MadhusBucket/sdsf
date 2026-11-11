@@ -8,6 +8,21 @@ export type LedgerInvoice = Pick<
   "id" | "company_id" | "doc_number" | "date" | "subject" | "grand_total" | "status" | "created_at"
 >;
 
+/** One line in a bill's payment story. */
+export interface BillEvent {
+  key: string;
+  date: string;
+  /** payment = paid for this bill; general = part of a general payment that cleared this bill. */
+  kind: "payment" | "general" | "writeoff" | "marked";
+  /** Plain words: Advance, Part payment, Final payment, Full payment, Written off, Marked paid. */
+  label: string;
+  amount: number;
+  tds: number;
+  mode: PaymentMode | null;
+  reference: string | null;
+  paymentId: string | null;
+}
+
 export interface InvoiceBalance {
   id: string;
   total: number;
@@ -18,6 +33,12 @@ export interface InvoiceBalance {
   pending: number;
   /** Marked "Paid" on the invoice before any payment was recorded here. */
   markedPaid: boolean;
+  /** Every payment that went to this bill, oldest first, with plain labels. */
+  events: BillEvent[];
+  /** Date the bill was fully paid or closed, if it is. */
+  closedOn: string | null;
+  /** Date of the latest money for this bill. */
+  lastPaidOn: string | null;
 }
 
 export interface CompanySummary {
@@ -52,8 +73,8 @@ const r = (paise: number) => paise / 100;
 export const isActiveInvoice = (d: Pick<Document, "status">) =>
   d.status !== "void" && d.status !== "replaced";
 
-const invoiceOrder = (a: LedgerInvoice, b: LedgerInvoice) =>
-  a.date.localeCompare(b.date) || a.doc_number.localeCompare(b.doc_number);
+export const invoiceOrder = (a: Pick<LedgerInvoice, "date" | "doc_number">, b: Pick<LedgerInvoice, "date" | "doc_number">) =>
+  a.date.localeCompare(b.date) || a.doc_number.localeCompare(b.doc_number, "en", { numeric: true });
 
 const paymentOrder = (a: Payment, b: Payment) =>
   a.paid_on.localeCompare(b.paid_on) || a.created_at.localeCompare(b.created_at);
@@ -100,58 +121,121 @@ export function computeLedger(
     const bills = invoices
       .filter((i) => keyOf(i.company_id) === companyId && isActiveInvoice(i))
       .sort(invoiceOrder);
-    const rows = new Map(
+    type Row = { total: number; received: number; writtenOff: number; events: BillEvent[] };
+    const rows = new Map<string, Row>(
       bills.map((b) => {
         const total = p(b.grand_total);
-        return [b.id, { total, received: markedPaid.has(b.id) ? total : 0, writtenOff: 0 }];
+        const marked = markedPaid.has(b.id);
+        return [
+          b.id,
+          {
+            total,
+            received: marked ? total : 0,
+            writtenOff: 0,
+            events: marked
+              ? [{ key: `m-${b.id}`, date: b.date, kind: "marked", label: "", amount: r(total), tds: 0, mode: null, reference: null, paymentId: null }]
+              : [],
+          },
+        ];
       })
     );
-    let pool = 0;
+    // Money not tied to a bill (or more than a bill needed), used for the oldest unpaid bills.
+    const pool: { pay: Payment; left: number }[] = [];
     let received = bills.filter((b) => markedPaid.has(b.id)).reduce((s, b) => s + p(b.grand_total), 0);
     let writtenOff = 0;
     let lastActivity: string | null = null;
+    const writeOffs: { row: Row; pay: Payment }[] = [];
 
-    for (const pay of payments
-      .filter((x) => payKey(x) === companyId && !x.voided_at)
-      .sort(paymentOrder)) {
+    for (const pay of payments.filter((x) => payKey(x) === companyId && !x.voided_at).sort(paymentOrder)) {
       if (!lastActivity || pay.paid_on > lastActivity) lastActivity = pay.paid_on;
       const row = pay.invoice_id ? rows.get(pay.invoice_id) : undefined;
       if (pay.kind === "adjustment") {
-        if (row) {
-          row.writtenOff += p(pay.amount);
-          writtenOff += p(pay.amount);
-        }
+        if (row) writeOffs.push({ row, pay });
         continue;
       }
       const value = p(pay.amount) + p(pay.tds);
       received += value;
-      if (row) row.received += value;
-      else pool += value;
-    }
-
-    // Anything paid beyond a bill's balance becomes general credit.
-    for (const row of rows.values()) {
-      const over = row.received + row.writtenOff - row.total;
-      if (over > 0) {
-        const fromReceived = Math.min(over, row.received);
-        row.received -= fromReceived;
-        pool += fromReceived;
+      if (!row) {
+        pool.push({ pay, left: value });
+        continue;
       }
+      // Paid for this bill: use what the bill still needs, keep any extra for other bills.
+      const used = Math.min(value, row.total - row.received);
+      if (used > 0) {
+        row.received += used;
+        row.events.push({
+          key: `p-${pay.id}`,
+          date: pay.paid_on,
+          kind: "payment",
+          label: "",
+          amount: r(used),
+          tds: r(Math.min(p(pay.tds), used)),
+          mode: pay.mode,
+          reference: pay.reference,
+          paymentId: pay.id,
+        });
+      }
+      if (value - used > 0) pool.push({ pay, left: value - used });
     }
 
+    // A write-off only covers what is still unpaid (if the client paid after all, it shrinks).
+    for (const { row, pay } of writeOffs) {
+      const used = Math.min(p(pay.amount), row.total - row.received - row.writtenOff);
+      if (used <= 0) continue;
+      row.writtenOff += used;
+      writtenOff += used;
+      row.events.push({ key: `w-${pay.id}`, date: pay.paid_on, kind: "writeoff", label: "", amount: r(used), tds: 0, mode: null, reference: null, paymentId: pay.id });
+    }
+
+    pool.sort((a, b) => paymentOrder(a.pay, b.pay));
     let billed = 0;
     let pending = 0;
     let oldestUnpaidDate: string | null = null;
     for (const bill of bills) {
       const row = rows.get(bill.id)!;
-      const take = Math.min(Math.max(0, row.total - row.received - row.writtenOff), pool);
-      row.received += take;
-      pool -= take;
+      for (const chunk of pool) {
+        const need = row.total - row.received - row.writtenOff;
+        if (need <= 0) break;
+        if (chunk.left <= 0) continue;
+        const take = Math.min(need, chunk.left);
+        chunk.left -= take;
+        row.received += take;
+        row.events.push({
+          key: `g-${chunk.pay.id}-${bill.id}`,
+          date: chunk.pay.paid_on,
+          kind: "general",
+          label: "",
+          amount: r(take),
+          tds: 0,
+          mode: chunk.pay.mode,
+          reference: chunk.pay.reference,
+          paymentId: chunk.pay.id,
+        });
+      }
       const rowPending = Math.max(0, row.total - row.received - row.writtenOff);
       billed += row.total;
       pending += rowPending;
       if (rowPending > 0 && !oldestUnpaidDate) oldestUnpaidDate = bill.date;
       if (!lastActivity || bill.date > lastActivity) lastActivity = bill.date;
+
+      // Plain labels, oldest first: Advance → Part payment → Final payment (or Full payment).
+      const order = { marked: 0, payment: 1, general: 1, writeoff: 2 };
+      const events = row.events.sort((a, b) => a.date.localeCompare(b.date) || order[a.kind] - order[b.kind]);
+      let sum = 0;
+      let closedOn: string | null = null;
+      let lastPaidOn: string | null = null;
+      events.forEach((e, i) => {
+        sum += p(e.amount);
+        const closes = sum >= row.total && !closedOn;
+        if (closes) closedOn = e.date;
+        if (e.kind === "marked") e.label = "Marked paid";
+        else if (e.kind === "writeoff") e.label = "Written off (bill closed)";
+        else {
+          lastPaidOn = e.date;
+          e.label = closes ? (i === 0 ? "Full payment" : "Final payment") : i === 0 ? "Advance" : "Part payment";
+        }
+      });
+
       invoiceResult.set(bill.id, {
         id: bill.id,
         total: r(row.total),
@@ -159,6 +243,9 @@ export function computeLedger(
         writtenOff: r(row.writtenOff),
         pending: r(rowPending),
         markedPaid: markedPaid.has(bill.id),
+        events,
+        closedOn: rowPending <= 0 ? closedOn ?? bill.date : null,
+        lastPaidOn,
       });
     }
 
@@ -167,7 +254,7 @@ export function computeLedger(
       received: r(received),
       writtenOff: r(writtenOff),
       pending: r(pending),
-      extra: r(pool),
+      extra: r(pool.reduce((s, c) => s + c.left, 0)),
       billCount: bills.length,
       oldestUnpaidDate,
       lastActivity,
@@ -222,6 +309,11 @@ export function companyEntries(
   const raw: Omit<LedgerEntry, "balance">[] = [];
   const numberOf = new Map(invoices.map((i) => [i.id, i.doc_number]));
   const markedPaid = markedPaidBills(invoices, payments);
+  // Write-offs count only for what was still unpaid (same rule as computeLedger).
+  const usedWriteOff = new Map<string, number>();
+  for (const bal of computeLedger(invoices, payments, () => "one").invoices.values()) {
+    for (const e of bal.events) if (e.kind === "writeoff" && e.paymentId) usedWriteOff.set(e.paymentId, e.amount);
+  }
 
   for (const inv of invoices.filter(isActiveInvoice)) {
     raw.push({
@@ -258,8 +350,14 @@ export function companyEntries(
         date: pay.paid_on,
         kind: "adjustment",
         title: "Written off (bill closed)",
-        detail: [pay.note, forBill ? `for ${forBill}` : ""].filter(Boolean).join(" · "),
-        amount: -Number(pay.amount),
+        detail: [
+          pay.note,
+          forBill ? `for ${forBill}` : "",
+          !pay.voided_at && (usedWriteOff.get(pay.id) ?? 0) < Number(pay.amount) ? "not needed, client paid later" : "",
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        amount: -(pay.voided_at ? Number(pay.amount) : usedWriteOff.get(pay.id) ?? 0),
         voided: !!pay.voided_at,
         paymentId: pay.id,
       });
