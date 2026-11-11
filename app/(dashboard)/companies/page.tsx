@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Building2, Edit, MapPin, Plus, Search, Trash2, X } from "lucide-react";
+import { Edit, MapPin, Plus, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -35,6 +35,7 @@ import { getEffectiveUserId } from "@/lib/auth/sharedAccess";
 import type { Company } from "@/lib/types/database";
 import { ensureProfile } from "@/lib/utils/ensureProfile";
 import { branchLabel, companyKey, groupCompanies } from "@/lib/companies/grouping";
+import { companyColor, companyInitials } from "@/lib/companies/colors";
 import { cn } from "@/lib/utils";
 
 interface DeleteTarget {
@@ -291,8 +292,12 @@ export default function CompaniesPage() {
                       <CardContent className="space-y-3 p-4">
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex min-w-0 items-start gap-3">
-                            <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-                              <Building2 className="size-5" />
+                            <span
+                              className="grid size-10 shrink-0 place-items-center rounded-full text-sm font-bold"
+                              style={{ backgroundColor: companyColor(group.name).soft, color: companyColor(group.name).text }}
+                              aria-hidden
+                            >
+                              {companyInitials(group.name)}
                             </span>
                             <div className="min-w-0">
                               <p className="font-heading text-base font-semibold leading-snug">{group.name}</p>

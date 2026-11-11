@@ -7,6 +7,7 @@ import { CalendarDays, Check, ChevronRight, Clock3, MapPin, Wallet } from "lucid
 import type { DocumentStatus } from "@/lib/types/database";
 import { formatIndianCurrency } from "@/lib/utils/formatting";
 import { cn } from "@/lib/utils";
+import { companyColor, companyInitials } from "@/lib/companies/colors";
 
 import { matchedItemLine, searchWords, type DashboardDocument } from "./SearchBar";
 
@@ -48,28 +49,6 @@ const STATUS_LABELS: Record<DocumentStatus, string> = {
 /** Money received against an invoice. Comes from the ledger later; until then the card shows a neutral state. */
 export interface PaymentSummary {
   received: number;
-}
-
-// Palette taken from the inspiration: soft blue, purple, yellow, green.
-const AVATAR_COLORS = [
-  "bg-[#e3ecfd] text-[#3b6fd8]",
-  "bg-[#f1e6fd] text-[#8a4fd6]",
-  "bg-[#fdf3d3] text-[#a17a05]",
-  "bg-[#ecf6d6] text-[#5c8a12]",
-];
-
-function companyInitials(name: string) {
-  const words = name
-    .replace(/\b(pvt|private|ltd|limited|llp|and|&|the)\b\.?/gi, " ")
-    .split(/[^A-Za-z0-9]+/)
-    .filter(Boolean);
-  return ((words[0]?.[0] ?? "?") + (words[1]?.[0] ?? "")).toUpperCase();
-}
-
-function avatarColor(name: string) {
-  let h = 0;
-  for (const ch of name.toLowerCase()) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return AVATAR_COLORS[h % AVATAR_COLORS.length];
 }
 
 /** "06 Nov 2026" from the document's own date (the date printed on the PDF). */
@@ -153,6 +132,7 @@ export function DocumentList({
         const branch = doc.companies?.branch?.trim();
         const inactive = doc.status === "void" || doc.status === "replaced";
         const showPayment = doc.type === "invoice" && !inactive;
+        const color = companyColor(company);
 
         // Payment: real numbers come from the ledger later; until then Paid = full, otherwise nothing recorded.
         const total = Number(doc.grand_total ?? 0);
@@ -182,10 +162,11 @@ export function DocumentList({
                 </span>
               </div>
 
-              {/* Company with branch */}
+              {/* Company, then branch · invoice number on one row */}
               <div className="mt-4 flex items-center gap-3.5">
                 <span
-                  className={cn("grid size-12 shrink-0 place-items-center rounded-full text-base font-bold", avatarColor(company))}
+                  className="grid size-12 shrink-0 place-items-center rounded-full text-base font-bold"
+                  style={{ backgroundColor: color.soft, color: color.text }}
                   aria-hidden
                 >
                   {companyInitials(company)}
@@ -194,31 +175,36 @@ export function DocumentList({
                   <p className="font-heading text-lg font-semibold leading-snug text-zinc-900 dark:text-zinc-50">
                     <Highlight text={company} words={words} />
                   </p>
-                  {branch && (
-                    <p className="flex items-center gap-1 text-sm text-zinc-500">
-                      <MapPin className="size-3.5 shrink-0" />
-                      <Highlight text={branch} words={words} />
-                    </p>
-                  )}
+                  <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-zinc-500">
+                    {branch && (
+                      <>
+                        <span className="inline-flex items-center gap-1">
+                          <MapPin className="size-3.5 shrink-0" />
+                          <Highlight text={branch} words={words} />
+                        </span>
+                        <span aria-hidden className="text-zinc-300">•</span>
+                      </>
+                    )}
+                    <span className="font-bold tabular-nums text-zinc-900 dark:text-zinc-50">
+                      <Highlight text={doc.doc_number} words={words} />
+                    </span>
+                  </p>
                 </div>
               </div>
 
-              {/* Number, subject, address */}
-              <div className="mt-4 space-y-1">
-                <p className="text-[15px] leading-snug">
-                  <span className="font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
-                    <Highlight text={doc.doc_number} words={words} />
-                  </span>
+              {/* Subject and address */}
+              {(doc.subject || addressLines.length > 0) && (
+                <div className="mt-4 space-y-1">
                   {doc.subject && (
-                    <span className="text-zinc-600 dark:text-zinc-300">
-                      {" "}· <Highlight text={doc.subject} words={words} />
-                    </span>
+                    <p className="text-[15px] leading-snug font-medium text-zinc-800 dark:text-zinc-100">
+                      <Highlight text={doc.subject} words={words} />
+                    </p>
                   )}
-                </p>
-                {addressLines.length > 0 && (
-                  <p className="text-xs leading-relaxed text-zinc-500">{addressLines.join(", ")}</p>
-                )}
-              </div>
+                  {addressLines.length > 0 && (
+                    <p className="text-xs leading-relaxed text-zinc-500">{addressLines.join(", ")}</p>
+                  )}
+                </div>
+              )}
 
               {itemHit && (
                 <p className="mt-3 rounded-2xl bg-[#fdf6dc] px-3.5 py-2 text-sm dark:bg-yellow-950/40">
@@ -227,8 +213,11 @@ export function DocumentList({
                 </p>
               )}
 
+              {/* Divider between who/what and the money */}
+              <div className="mt-5 border-t border-dashed border-black/10 dark:border-white/10" />
+
               {/* Total */}
-              <div className="mt-5 flex items-start justify-between gap-3">
+              <div className="mt-4 flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm text-zinc-500">Total amount</p>
                   <p

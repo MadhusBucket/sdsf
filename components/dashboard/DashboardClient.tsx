@@ -23,7 +23,7 @@ import { rememberListTab } from "@/components/nav/lastListTab";
 
 import { DocumentList } from "./DocumentList";
 import { DateFilter } from "./DateFilter";
-import { KPICards } from "./KPICards";
+import { KPICards, type KpiPeriod } from "./KPICards";
 import { fuzzyMatchesDocument, SearchBar, type DashboardDocument } from "./SearchBar";
 import { StatusFilter, type StatusFilterValue } from "./StatusFilter";
 
@@ -63,7 +63,7 @@ export function DashboardClient({ type }: { type: DocumentType }) {
   const [status, setStatus] = useState<StatusFilterValue>("all");
   const [company, setCompany] = useState<string>(ALL_COMPANIES);
   const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
-  const [kpiDateFilter, setKpiDateFilter] = useState<"today" | "7days" | "30days" | "all">("all");
+  const [kpiDateFilter, setKpiDateFilter] = useState<KpiPeriod>("30days");
   const [restored, setRestored] = useState(false);
   const restoredRef = useRef(false);
 
@@ -194,31 +194,6 @@ export function DashboardClient({ type }: { type: DocumentType }) {
       .filter((doc) => fuzzyMatchesDocument(doc, query));
   }, [ofType, query, status, companyFilter, dateFilter]);
 
-  function filterDocumentsByDate(
-    docs: DashboardDocument[],
-    filter: "today" | "7days" | "30days" | "all",
-  ) {
-    if (filter === "all") return docs;
-
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-    let cutoffDate: Date;
-    if (filter === "today") {
-      cutoffDate = startOfToday;
-    } else if (filter === "7days") {
-      cutoffDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    } else {
-      cutoffDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    }
-
-    return docs.filter((doc) => {
-      const docDate = new Date(doc.date || doc.created_at);
-      return docDate >= cutoffDate;
-    });
-  }
-
-  const filteredForKpi = filterDocumentsByDate(documents, kpiDateFilter);
   const plural = type === "invoice" ? "Invoices" : "Quotations";
   const singular = type === "invoice" ? "invoice" : "quotation";
 
@@ -235,23 +210,7 @@ export function DashboardClient({ type }: { type: DocumentType }) {
           </Button>
         </div>
 
-        <div>
-          <Select
-            value={kpiDateFilter}
-            onValueChange={(v) => setKpiDateFilter(v as typeof kpiDateFilter)}
-          >
-            <SelectTrigger className="w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="today">Today</SelectItem>
-              <SelectItem value="7days">Last 7 days</SelectItem>
-              <SelectItem value="30days">Last 30 days</SelectItem>
-              <SelectItem value="all">All time</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <KPICards documents={filteredForKpi} type={type} />
+        <KPICards documents={documents} type={type} period={kpiDateFilter} onPeriodChange={setKpiDateFilter} />
 
         <SearchBar query={query} onChange={setQuery} />
 
