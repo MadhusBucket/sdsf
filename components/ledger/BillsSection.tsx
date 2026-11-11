@@ -258,8 +258,8 @@ export function BillsSection(props: Props) {
         client: { name: props.companyName, gstin: props.clientGstin },
         bills: chosen.map((r) => ({
           docNumber: r.inv.doc_number,
-          // The client knows the site by its landmark; the full address when there is none.
-          site: r.branch || r.address,
+          // Branch and full address, so the client sees exactly which site each bill is for.
+          site: [r.branch, r.address].filter(Boolean).join("\n"),
           date: r.inv.date,
           subject: r.inv.subject ?? "",
           total: r.bal.total,

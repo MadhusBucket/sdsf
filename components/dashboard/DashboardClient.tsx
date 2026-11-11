@@ -209,17 +209,11 @@ export function DashboardClient({ type }: { type: DocumentType }) {
     return out;
   }, [type, links, documents]);
 
-  const pendingFromLedger = useMemo(() => {
+  const pendingById = useMemo(() => {
     if (!ledger) return undefined;
-    let amount = 0;
-    let count = 0;
-    for (const bal of ledger.invoices.values()) {
-      if (bal.pending > 0) {
-        amount += bal.pending;
-        count += 1;
-      }
-    }
-    return { amount, count };
+    const out: Record<string, number> = {};
+    for (const [id, bal] of ledger.invoices) out[id] = bal.pending;
+    return out;
   }, [ledger]);
 
   // Companies (grouped with their branches) that have documents of this type, with how many.
@@ -271,7 +265,7 @@ export function DashboardClient({ type }: { type: DocumentType }) {
         <KPICards
           documents={documents}
           type={type}
-          pending={pendingFromLedger}
+          pendingById={pendingById}
           payments={payments}
           madeInto={madeInto}
           period={period}

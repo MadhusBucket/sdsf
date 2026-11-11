@@ -21,8 +21,8 @@ const PERIODS: { value: DashPeriod; label: string }[] = [
 interface KPICardsProps {
   documents: DashboardDocument[];
   type: DocumentType;
-  /** Pending worked out from recorded payments (all bills, as of today). */
-  pending?: { amount: number; count: number };
+  /** Still to collect on each invoice, worked out from recorded payments. Without it, invoices not marked Paid count in full. */
+  pendingById?: Record<string, number>;
   /** Recorded payments; null until the payments table is set up. */
   payments?: Payment[] | null;
   /** Quotation id → invoice numbers made from it. */
@@ -107,6 +107,28 @@ function periodInfo(period: DashPeriod, now: Date) {
 }
 
 const inRange = (day: string, r: Range) => day >= r.from && day <= r.to;
+
+/** ₹6.21 lakh, ₹1.25 crore: how people say it. Below 1 lakh the plain amount. */
+function spoken(n: number) {
+  const trim = (x: number) => String(+x.toFixed(2));
+  if (n >= 1e7) return { main: `₹${trim(n / 1e7)}`, unit: "crore" };
+  if (n >= 1e5) return { main: `₹${trim(n / 1e5)}`, unit: "lakh" };
+  return { main: rupees(n), unit: "" };
+}
+
+/** Big number in lakh/crore, with the exact amount under it. */
+function Big({ value, className }: { value: number; className?: string }) {
+  const { main, unit } = spoken(value);
+  return (
+    <div>
+      <p className={cn("font-heading text-[30px] leading-tight font-bold tracking-tight tabular-nums", className)}>
+        {main}
+        {unit && <span className="ml-1.5 text-lg font-semibold">{unit}</span>}
+      </p>
+      {unit && <p className="text-xs text-zinc-400 tabular-nums">{rupees(value)}</p>}
+    </div>
+  );
+}
 const rupees = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
 
 /** Short money for chart labels: ₹50K, ₹1.5L, ₹2Cr. */
@@ -130,7 +152,7 @@ function niceStep(max: number) {
  * stretch before, money received, what is pending today, and a graph.
  * Cancelled and replaced documents are never counted.
  */
-export function KPICards({ documents, type, pending, payments, madeInto, period, onPeriodChange }: KPICardsProps) {
+export function KPICards({ documents, type, pendingById, payments, madeInto, period, onPeriodChange }: KPICardsProps) {
   const isInvoice = type === "invoice";
   const word = isInvoice ? "invoice" : "quotation";
 
@@ -153,8 +175,10 @@ export function KPICards({ documents, type, pending, payments, madeInto, period,
       ? payments.filter((p) => !p.voided_at && p.kind === "payment" && inRange(p.paid_on, info.current)).length
       : 0;
 
-    // Without the ledger: invoices not marked Paid (all time).
-    const notPaid = docs.filter((d) => d.status !== "paid");
+    // Still to collect from the bills made in this period.
+    const pendingOf = (d: DashboardDocument) =>
+      pendingById ? pendingById[d.id] ?? 0 : d.status === "paid" ? 0 : Number(d.grand_total ?? 0);
+    const unpaid = inPeriod.filter((d) => pendingOf(d) > 0);
     const made = inPeriod.filter((d) => madeInto?.[d.id]?.length).length;
 
     return {
@@ -165,11 +189,11 @@ export function KPICards({ documents, type, pending, payments, madeInto, period,
       totals,
       received,
       receivedCount,
-      fallbackPending: notPaid.reduce((t, d) => t + Number(d.grand_total ?? 0), 0),
-      fallbackPendingCount: notPaid.length,
+      pending: unpaid.reduce((t, d) => t + pendingOf(d), 0),
+      pendingCount: unpaid.length,
       made,
     };
-  }, [documents, type, payments, madeInto, period]);
+  }, [documents, type, payments, madeInto, period, pendingById]);
 
   const [active, setActive] = useState<number | null>(null);
   const n = s.totals.length;
@@ -185,8 +209,6 @@ export function KPICards({ documents, type, pending, payments, madeInto, period,
   // On a phone, show fewer x labels when there are many points.
   const every = n > 14 ? 5 : n > 8 ? 2 : 1;
 
-  const pendingAmount = pending ? pending.amount : s.fallbackPending;
-  const pendingCount = pending ? pending.count : s.fallbackPendingCount;
 
   return (
     <section className="overflow-hidden rounded-[24px] border border-black/[0.06] bg-white shadow-[0_1px_3px_rgba(16,24,40,0.04)] dark:border-white/10 dark:bg-card">
@@ -225,9 +247,7 @@ export function KPICards({ documents, type, pending, payments, madeInto, period,
       >
         <div>
           <p className="text-sm text-zinc-500">{isInvoice ? "Billed" : "Quoted"}</p>
-          <p className="font-heading text-[30px] leading-tight font-bold tracking-tight tabular-nums text-zinc-900 dark:text-zinc-50">
-            {rupees(s.current)}
-          </p>
+          <Big value={s.current} className="text-zinc-900 dark:text-zinc-50" />
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
             {s.change !== null ? (
               <span className={cn("inline-flex items-center gap-1 font-semibold", s.change >= 0 ? "text-emerald-600" : "text-red-600")}>
@@ -247,9 +267,11 @@ export function KPICards({ documents, type, pending, payments, madeInto, period,
           <>
             <div className="sm:border-l sm:border-black/[0.06] sm:pl-5 dark:sm:border-white/10">
               <p className="text-sm text-zinc-500">Received</p>
-              <p className="font-heading text-[30px] leading-tight font-bold tracking-tight tabular-nums text-emerald-700 dark:text-emerald-400">
-                {s.received === null ? "—" : rupees(s.received)}
-              </p>
+              {s.received === null ? (
+                <p className="font-heading text-[30px] leading-tight font-bold text-emerald-700">—</p>
+              ) : (
+                <Big value={s.received} className="text-emerald-700 dark:text-emerald-400" />
+              )}
               <p className="mt-1 text-sm text-zinc-500">
                 {s.received === null
                   ? "Shows once payments are switched on"
@@ -257,14 +279,12 @@ export function KPICards({ documents, type, pending, payments, madeInto, period,
               </p>
             </div>
             <div className="sm:border-l sm:border-black/[0.06] sm:pl-5 dark:sm:border-white/10">
-              <p className="text-sm text-zinc-500">Pending today</p>
-              <p className="font-heading text-[30px] leading-tight font-bold tracking-tight tabular-nums text-amber-600">
-                {rupees(pendingAmount)}
-              </p>
+              <p className="text-sm text-zinc-500">Still to collect</p>
+              <Big value={s.pending} className="text-amber-600" />
               <p className="mt-1 text-sm text-zinc-500">
-                {pending
-                  ? `${pendingCount} ${pendingCount === 1 ? "bill" : "bills"} to collect · all time`
-                  : `${pendingCount} ${pendingCount === 1 ? "invoice" : "invoices"} not marked paid · all time`}
+                {s.pendingCount === 0
+                  ? "Nothing pending from these bills"
+                  : `From ${s.pendingCount} of these ${s.count} ${s.count === 1 ? "bill" : "bills"}${pendingById ? "" : " (not marked paid)"}`}
               </p>
             </div>
           </>

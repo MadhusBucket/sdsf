@@ -10,7 +10,7 @@ import { formatDay, MODE_LABELS, todayISO, type BillEvent, type LedgerEntry } fr
 
 export interface ExportBill {
   docNumber: string;
-  /** Site / branch as the client knows it (landmark, else address). */
+  /** Site: branch / landmark and the full address, one under the other. */
   site: string;
   date: string;
   subject: string;
@@ -159,7 +159,7 @@ function statementSheet(ws: Worksheet, input: ExportInput) {
   ws.columns = [
     { width: 15 }, // A Bill no
     { width: 13 }, // B Bill date
-    { width: 24 }, // C Site
+    { width: 30 }, // C Site: branch and full address
     { width: 36 }, // D Work / payment
     { width: 16 }, // E Bill amount
     { width: 16 }, // F Paid
@@ -170,7 +170,6 @@ function statementSheet(ws: Worksheet, input: ExportInput) {
   // Who it is for
   line(ws, 6, "A", "D", "PAYMENT STATEMENT", { size: 10, bold: true, color: BRAND });
   line(ws, 7, "A", "D", input.client.name, { size: 14, bold: true }, 22);
-  if (input.client.gstin) line(ws, 8, "A", "D", `GSTIN ${input.client.gstin}`, { size: 10, color: MUTED });
   line(ws, 6, "E", "G", `Date: ${today}`, { size: 10, color: MUTED }).alignment = { horizontal: "right" };
   const billWord = bills.length === 1 ? `Bill ${bills[0].docNumber}` : `${bills.length} bills`;
   line(ws, 7, "E", "G", billWord, { size: 10, color: MUTED }).alignment = { horizontal: "right", vertical: "middle" };
@@ -224,7 +223,7 @@ function statementSheet(ws: Worksheet, input: ExportInput) {
       r.getCell(7).alignment = { horizontal: "right", vertical: "top" };
     }
     r.height = heightFor([
-      [bill.site, 24],
+      [bill.site, 30],
       [bill.subject, 36],
     ]);
     row++;
@@ -302,7 +301,7 @@ function statementSheet(ws: Worksheet, input: ExportInput) {
   // How to pay
   row += 1;
   if (net > 0 && b.bank && (b.bank.accountNumber || b.bank.bankName)) {
-    line(ws, row++, "A", "D", "Please pay the balance to", { size: 10, bold: true });
+    line(ws, row++, "A", "D", "Banking details", { size: 10, bold: true });
     const bankLines = [
       b.bank.accountName && `Account name: ${b.bank.accountName}`,
       b.bank.bankName && `Bank: ${b.bank.bankName}${b.bank.branch ? `, ${b.bank.branch}` : ""}`,
@@ -312,10 +311,7 @@ function statementSheet(ws: Worksheet, input: ExportInput) {
     for (const l of bankLines) line(ws, row++, "A", "D", l, { size: 10 });
     row += 1;
   }
-  const notes = [
-    "“Paid” includes any TDS you deducted.",
-    b.phone ? `For any questions about this statement, please call ${b.phone}.` : "",
-  ].filter(Boolean);
+  const notes = [b.phone ? `For any questions about this statement, please call ${b.phone}.` : ""].filter(Boolean);
   for (const n of notes) line(ws, row++, "A", "G", n, { size: 9, italic: true, color: MUTED });
   row += 1;
   if (b.name) line(ws, row, "D", "G", `For ${b.name}`, { size: 10, bold: true }).alignment = { horizontal: "right", wrapText: true };
