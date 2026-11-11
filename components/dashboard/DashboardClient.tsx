@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, X } from "lucide-react";
+import Link from "next/link";
+import { Download, Plus, X } from "lucide-react";
 import { motion } from "framer-motion";
 
 import { Button } from "@/components/ui/button";
@@ -142,7 +143,7 @@ export function DashboardClient() {
   return (
     <>
       <div className="space-y-4 p-4 pb-28 sm:p-6">
-        <div className="mb-4">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <Select
             value={kpiDateFilter}
             onValueChange={(v) => setKpiDateFilter(v as typeof kpiDateFilter)}
@@ -157,6 +158,12 @@ export function DashboardClient() {
               <SelectItem value="all">All time</SelectItem>
             </SelectContent>
           </Select>
+          <Button asChild variant="outline" className="h-10">
+            <Link href="/export">
+              <Download className="size-4" />
+              Download all
+            </Link>
+          </Button>
         </div>
         <KPICards documents={filteredForKpi} />
         <DocumentToggle value={type} onChange={setType} />
