@@ -8,11 +8,33 @@ import type { DocumentStatus } from "@/lib/types/database";
 import { formatIndianCurrency } from "@/lib/utils/formatting";
 import { cn } from "@/lib/utils";
 
-import type { DashboardDocument } from "./SearchBar";
+import { matchedItemLine, searchWords, type DashboardDocument } from "./SearchBar";
 
 interface DocumentListProps {
   documents: DashboardDocument[];
   documentType?: "invoice" | "quotation";
+  /** Current search text, used to show which item matched. */
+  query?: string;
+}
+
+/** Wraps the searched words in a highlight. */
+function Highlight({ text, words }: { text: string; words: string[] }) {
+  if (!words.length) return <>{text}</>;
+  const escaped = words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const parts = text.split(new RegExp(`(${escaped.join("|")})`, "gi"));
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 ? (
+          <mark key={i} className="rounded bg-yellow-200 px-0.5 text-inherit dark:bg-yellow-700">
+            {part}
+          </mark>
+        ) : (
+          part
+        )
+      )}
+    </>
+  );
 }
 
 const STATUS_STYLES: Record<DocumentStatus, string> = {
@@ -31,7 +53,8 @@ const STATUS_LABELS: Record<DocumentStatus, string> = {
   replaced: "Replaced",
 };
 
-export function DocumentList({ documents, documentType }: DocumentListProps) {
+export function DocumentList({ documents, documentType, query = "" }: DocumentListProps) {
+  const words = searchWords(query);
   if (documents.length === 0) {
     return (
       <div className="rounded-lg border border-dashed bg-muted/30 px-4 py-10 text-center text-sm text-muted-foreground">
@@ -54,6 +77,7 @@ export function DocumentList({ documents, documentType }: DocumentListProps) {
           !hasIntraGst &&
           (doc.grand_total ?? 0) - (doc.subtotal ?? 0) - (doc.round_off ?? 0) > 0;
         const hasGst = hasIntraGst || hasInterGst;
+        const itemHit = matchedItemLine(doc, query);
 
         return (
           <Link
@@ -105,6 +129,13 @@ export function DocumentList({ documents, documentType }: DocumentListProps) {
                 <p className="mb-1 text-xs text-muted-foreground">Subject</p>
                 <p className="line-clamp-2 text-sm font-medium">{doc.subject}</p>
               </div>
+            )}
+
+            {itemHit && (
+              <p className="mt-3 rounded-lg bg-muted px-3 py-2 text-sm">
+                <span className="text-muted-foreground">Item: </span>
+                <Highlight text={itemHit} words={words} />
+              </p>
             )}
 
             {/* Bottom row: total + GST badge */}

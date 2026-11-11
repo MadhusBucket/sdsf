@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 
 type FontSize = "normal" | "large" | "xlarge";
@@ -82,9 +81,6 @@ export function DashboardHeader() {
               {FONT_SIZE_LABELS[fontSize]}
             </span>
           </button>
-          <Button asChild variant="ghost" size="sm">
-            <Link href="/companies">Manage Companies</Link>
-          </Button>
           <button
             type="button"
             aria-label="Logout"
