@@ -199,17 +199,25 @@ export function DashboardClient({ type }: { type: DocumentType }) {
   return (
     <>
       <div className="space-y-4 p-4 pb-28 sm:p-6">
-        <div className="flex items-center justify-between gap-3">
-          <h1 className="font-heading text-2xl font-bold tracking-tight">{plural}</h1>
-          <Button asChild variant="outline" className="h-10">
+        {/* Dashboard */}
+        <h1 className="font-heading text-2xl font-bold tracking-tight">Dashboard</h1>
+        <KPICards documents={documents} type={type} />
+
+        {/* Divider between the dashboard and the list */}
+        <div className="pt-4">
+          <div className="border-t border-black/10 dark:border-white/10" />
+        </div>
+
+        {/* Invoices / Quotations */}
+        <div className="flex items-center justify-between gap-3 pt-2">
+          <h2 className="font-heading text-2xl font-bold tracking-tight">{plural}</h2>
+          <Button asChild variant="outline" className="h-10 bg-white">
             <Link href="/export">
               <Download className="size-4" />
               Download all
             </Link>
           </Button>
         </div>
-
-        <KPICards documents={documents} type={type} />
 
         <SearchBar query={query} onChange={setQuery} />
 
@@ -233,9 +241,9 @@ export function DashboardClient({ type }: { type: DocumentType }) {
           </p>
           <div className="flex w-full min-w-0 items-center gap-2 sm:ml-auto sm:w-auto">
             <Select value={company} onValueChange={setCompany}>
-              <SelectTrigger className="h-11 min-w-0 flex-1 border-gray-300 bg-white sm:w-48 sm:flex-none" aria-label="Filter by company">
+              <SelectTrigger className="h-11 min-w-0 flex-1 gap-2 border-gray-300 bg-white sm:w-56 sm:flex-none [&>svg]:shrink-0 [&>[data-slot=select-value]]:min-w-0 [&>[data-slot=select-value]]:flex-1 [&>[data-slot=select-value]]:overflow-hidden" aria-label="Filter by company">
                 <SelectValue placeholder="All companies">
-                  <span className="truncate">{companyFilter ? companyFilter.label : "All companies"}</span>
+                  <span className="block truncate text-left">{companyFilter ? companyFilter.label : "All companies"}</span>
                 </SelectValue>
               </SelectTrigger>
               <SelectContent className="max-h-[60vh]">
